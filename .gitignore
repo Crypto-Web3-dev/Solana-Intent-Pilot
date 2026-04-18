@@ -1,0 +1,5 @@
+.pnpm-store/
+
+extension/node_modules/
+extension/build/
+extension/.plasmo/
