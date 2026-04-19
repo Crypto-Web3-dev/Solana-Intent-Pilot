@@ -22,7 +22,12 @@ describe("shared runtime contracts", () => {
         reasoning: "Swap to USDC",
         requiresRiskScan: true,
         sourceContext: ["page-token"],
-        needsClarification: false
+        needsClarification: false,
+        clarification: {
+          kind: "ambiguous-output-mint",
+          message: "Multiple token candidates were detected.",
+          candidateSymbols: ["BONK", "WIF"]
+        }
       }
     };
 
@@ -31,6 +36,7 @@ describe("shared runtime contracts", () => {
 
   it("supports unknown risk level without creating a workflow phase", () => {
     const report: SecurityReport = {
+      source: "policy-fallback",
       score: 0,
       level: "unknown",
       blocking: false,

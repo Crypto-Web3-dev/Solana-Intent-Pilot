@@ -1,4 +1,5 @@
 export type RiskLevel = "low" | "medium" | "high" | "unknown";
+export type RiskEngineSource = "wasm" | "policy-fallback";
 
 export interface SecurityCheck {
   key: string;
@@ -8,6 +9,7 @@ export interface SecurityCheck {
 }
 
 export interface SecurityReport {
+  source: RiskEngineSource;
   score: number;
   level: RiskLevel;
   blocking: boolean;

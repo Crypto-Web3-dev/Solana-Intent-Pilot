@@ -89,6 +89,7 @@ export type WorkflowReason =
   | "risk-check-failed"
   | "quote-failed"
   | "simulation-failed"
+  | "unsupported-page"
   | "signature-cancelled"
   | "submit-failed"
   | "confirmed";
@@ -176,6 +177,7 @@ MVP 推荐业务规则：
 
 ```ts
 export interface SecurityReport {
+  source: "wasm" | "policy-fallback";
   score: number;
   level: RiskLevel;
   blocking: boolean;
@@ -193,6 +195,7 @@ export interface SecurityReport {
 
 - `score`: 供 UI 和调试使用的综合分值
 - `level`: 面向用户展示的风险等级
+- `source`: 当前风险结果来自 Wasm 还是策略回退
 - `blocking`: 是否阻断当前执行流程
 - `checks`: 具体检查项明细
 - `summary`: 给 UI 直接展示的摘要

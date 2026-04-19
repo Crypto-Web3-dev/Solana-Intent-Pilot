@@ -17,7 +17,27 @@ function phaseLabel(phase: WorkflowPhase) {
     return "Simulating outcome";
   }
 
-  return "Detected context ready";
+  if (phase === "awaiting-signature") {
+    return "Preview ready";
+  }
+
+  if (phase === "submitting") {
+    return "Submitting transaction";
+  }
+
+  if (phase === "confirmed") {
+    return "Transaction confirmed";
+  }
+
+  if (phase === "blocked") {
+    return "Blocked by policy";
+  }
+
+  if (phase === "failed") {
+    return "Execution failed";
+  }
+
+  return "Ready for a new request";
 }
 
 export function DetectionBar({ phase }: { phase: WorkflowPhase }) {

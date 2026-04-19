@@ -33,6 +33,10 @@ export function createWorkflowEngine() {
     return currentState?.phase;
   }
 
+  function clearState(requestId: string) {
+    states.delete(requestId);
+  }
+
   function isStickyIdleResolution(requestId: string) {
     const currentState = states.get(requestId);
 
@@ -167,6 +171,9 @@ export function createWorkflowEngine() {
     },
     getState(requestId: string) {
       return states.get(requestId);
+    },
+    clearState(requestId: string) {
+      clearState(requestId);
     }
   };
 }

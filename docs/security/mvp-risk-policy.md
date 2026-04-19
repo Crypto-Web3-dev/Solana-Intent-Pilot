@@ -45,6 +45,7 @@
 推荐理解方式：
 
 - `level`: 给用户看的风险等级
+- `source`: 给用户看的风险引擎来源，区分 `wasm` 与 `policy-fallback`
 - `blocking`: 给工作流看的是否阻断
 - `checks`: 给 UI 和调试看的具体原因
 

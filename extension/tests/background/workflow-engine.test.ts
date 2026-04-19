@@ -1,5 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createMessageRouter } from "../../src/background/message-router";
+import { createMockIntentParser } from "../../src/background/intent-parser";
+import { normalizeIntentWithContext } from "../../src/background/openai-intent-parser";
+import { createMockPreviewAdapter } from "../../src/background/preview-adapter";
+import { createPolicyPreviewAdapter } from "../../src/background/preview-adapter";
+import {
+  createMockRiskAdapter,
+  createPolicyRiskAdapter
+} from "../../src/background/risk-adapter";
+import { createMockSimulationAdapter } from "../../src/background/simulation-adapter";
+import { createMockRuntimeServices } from "../../src/background/runtime-services";
 import type { SIPIntent } from "../../src/shared/intent";
 import type {
   ExecutionCancelledMessage,
@@ -53,6 +63,7 @@ describe("workflow engine", () => {
   it("advances to awaiting-signature for a happy path", () => {
     const engine = createWorkflowEngine();
     const happyRisk: SecurityReport = {
+      source: "policy-fallback",
       score: 90,
       level: "low",
       blocking: false,
@@ -72,6 +83,7 @@ describe("workflow engine", () => {
   it("ignores stale events once awaiting-signature is reached", () => {
     const engine = createWorkflowEngine();
     const happyRisk: SecurityReport = {
+      source: "policy-fallback",
       score: 90,
       level: "low",
       blocking: false,
@@ -86,6 +98,7 @@ describe("workflow engine", () => {
     engine.handleSimulationReady("req-1b");
 
     engine.handleRiskReport("req-1b", {
+      source: "policy-fallback",
       score: 5,
       level: "high",
       blocking: true,
@@ -109,6 +122,7 @@ describe("workflow engine", () => {
   it("advances from awaiting-signature to confirmed through submission events", () => {
     const engine = createWorkflowEngine();
     const happyRisk: SecurityReport = {
+      source: "policy-fallback",
       score: 90,
       level: "low",
       blocking: false,
@@ -132,6 +146,7 @@ describe("workflow engine", () => {
   it("returns to idle when signature is cancelled", () => {
     const engine = createWorkflowEngine();
     const happyRisk: SecurityReport = {
+      source: "policy-fallback",
       score: 90,
       level: "low",
       blocking: false,
@@ -153,6 +168,7 @@ describe("workflow engine", () => {
   it("moves to failed when submission fails", () => {
     const engine = createWorkflowEngine();
     const happyRisk: SecurityReport = {
+      source: "policy-fallback",
       score: 90,
       level: "low",
       blocking: false,
@@ -195,6 +211,7 @@ describe("workflow engine", () => {
       intent: "TRANSFER"
     });
     engine.handleRiskReport("req-0b", {
+      source: "policy-fallback",
       score: 90,
       level: "low",
       blocking: false,
@@ -239,6 +256,7 @@ describe("workflow engine", () => {
       }
     });
     engine.handleRiskReport("req-2c", {
+      source: "policy-fallback",
       score: 90,
       level: "low",
       blocking: false,
@@ -270,6 +288,7 @@ describe("workflow engine", () => {
   it("moves to blocked when risk is blocking", () => {
     const engine = createWorkflowEngine();
     const blockedRisk: SecurityReport = {
+      source: "policy-fallback",
       score: 10,
       level: "high",
       blocking: true,
@@ -295,6 +314,7 @@ describe("workflow engine", () => {
   it("ignores stale events after blocked", () => {
     const engine = createWorkflowEngine();
     const blockedRisk: SecurityReport = {
+      source: "policy-fallback",
       score: 10,
       level: "high",
       blocking: true,
@@ -322,6 +342,7 @@ describe("workflow engine", () => {
   it("moves to failed when simulation fails during preview generation", () => {
     const engine = createWorkflowEngine();
     const happyRisk: SecurityReport = {
+      source: "policy-fallback",
       score: 90,
       level: "low",
       blocking: false,
@@ -343,6 +364,7 @@ describe("workflow engine", () => {
   it("ignores stale events after failed", () => {
     const engine = createWorkflowEngine();
     const happyRisk: SecurityReport = {
+      source: "policy-fallback",
       score: 90,
       level: "low",
       blocking: false,
@@ -384,6 +406,118 @@ describe("workflow engine", () => {
     expect(events.at(-1)?.type).toBe("execution.preview.ready");
   });
 
+  it("uses the default runtime services when none are injected", async () => {
+    const router = createMessageRouter();
+    const events = await router.handleIntentRequest({
+      type: "intent.parse.requested",
+      payload: {
+        requestId: "req-default-services",
+        tabId: 1,
+        userInput: "buy 1 SOL of this",
+        contextSnapshot: {
+          tabId: 1,
+          url: "https://example.com",
+          title: "Example",
+          detectedTokens: [],
+          rawHints: [],
+          detectedAt: "2026-04-18T00:00:00.000Z"
+        }
+      }
+    });
+
+    expect(events.some((event) => event.type === "execution.preview.ready")).toBe(
+      true
+    );
+  });
+
+  it("passes contextSnapshot through the parser boundary", async () => {
+    const parseIntent = vi.fn().mockResolvedValue(validIntent);
+    const router = createMessageRouter(undefined, {
+      parseIntent,
+      scanRisk: createMockRiskAdapter().scanRisk,
+      buildPreview: createMockPreviewAdapter().buildPreview
+    });
+    const contextSnapshot = {
+      tabId: 2,
+      url: "https://x.com/some-post",
+      title: "A post on X",
+      selectedText: "buy this token",
+      detectedTokens: [
+        {
+          symbol: "BONK",
+          source: "twitter" as const,
+          confidence: 0.82
+        }
+      ],
+      rawHints: ["buy", "bonk", "jupiter"],
+      detectedAt: "2026-04-19T00:00:00.000Z"
+    };
+
+    await router.handleIntentRequest({
+      type: "intent.parse.requested",
+      payload: {
+        requestId: "req-context-pass",
+        tabId: 2,
+        userInput: "buy 1 SOL of this",
+        contextSnapshot
+      }
+    });
+
+    expect(parseIntent).toHaveBeenCalledWith("buy 1 SOL of this", contextSnapshot);
+  });
+
+  it("keeps the default intent parser on the mock path", async () => {
+    const parser = createMockIntentParser();
+    const intent = await parser.parseIntent("buy 1 SOL of this");
+
+    expect(intent.intent).toBe("SWAP");
+    expect(intent.metadata.needsClarification).toBe(false);
+  });
+
+  it("keeps the default risk adapter on the mock path", async () => {
+    const adapter = createMockRiskAdapter();
+    const report = await adapter.scanRisk(validIntent);
+
+    expect(report.level).toBe("low");
+    expect(report.blocking).toBe(false);
+  });
+
+  it("uses the policy risk adapter to block obvious bad inputs", async () => {
+    const adapter = createPolicyRiskAdapter();
+    const report = await adapter.scanRisk({
+      ...validIntent,
+      payload: {
+        ...validIntent.payload,
+        outputMint: "blocked-mint-address"
+      }
+    });
+
+    expect(report.level).toBe("high");
+    expect(report.blocking).toBe(true);
+    expect(report.checks.some((check) => check.key === "mint-authority")).toBe(
+      true
+    );
+  });
+
+  it("keeps the default preview adapter on the mock path", async () => {
+    const adapter = createMockPreviewAdapter();
+    const preview = await adapter.buildPreview("req-preview");
+
+    expect(preview.requestId).toBe("req-preview");
+    expect(preview.routeLabel).toBe("Jupiter");
+  });
+
+  it("uses the policy preview adapter to combine quote and simulation results", async () => {
+    const adapter = createPolicyPreviewAdapter({
+      simulationAdapter: createMockSimulationAdapter()
+    });
+    const preview = await adapter.buildPreview("req-policy-preview", validIntent);
+
+    expect(preview.requestId).toBe("req-policy-preview");
+    expect(preview.routeLabel).toBe("Jupiter");
+    expect(preview.simulationSummary).toBe("Mock simulation passed");
+  });
+
   it("moves from awaiting-signature to confirmed through router submission events", async () => {
     const router = createMessageRouter();
 
@@ -404,7 +538,7 @@ describe("workflow engine", () => {
       }
     });
 
-    const executionConfirmed = router.handleExecutionConfirmed({
+    const executionConfirmed = await router.handleExecutionConfirmed({
       type: "execution.confirmed",
       payload: {
         requestId: "req-submit"
@@ -517,7 +651,8 @@ describe("workflow engine", () => {
   });
 
   it("emits parse failure and failed state for malformed intent input", async () => {
-    const router = createMessageRouter();
+    const engine = createWorkflowEngine();
+    const router = createMessageRouter(engine);
 
     const events = await router.handleIntentRequest({
       type: "intent.parse.requested",
@@ -554,10 +689,15 @@ describe("workflow engine", () => {
       phase: "failed",
       reason: "intent-invalid"
     });
+    expect(engine.getState("req-parse-fail")).toBeUndefined();
   });
 
   it("emits risk scan failure and failed state for risk-fail input", async () => {
-    const router = createMessageRouter();
+    const router = createMessageRouter(undefined, {
+      parseIntent: createMockIntentParser().parseIntent,
+      scanRisk: createMockRiskAdapter().scanRisk,
+      buildPreview: createMockPreviewAdapter().buildPreview
+    });
 
     const events = await router.handleIntentRequest({
       type: "intent.parse.requested",
@@ -621,6 +761,135 @@ describe("workflow engine", () => {
     );
     expect(getWorkflowStates(events).at(-1)?.payload).toEqual({
       requestId: "req-clarify",
+      phase: "idle",
+      reason: "clarification-required"
+    });
+  });
+
+  it("returns to idle when parser-side normalization sets clarification", async () => {
+    const parseIntent = vi.fn(async (userInput: string) =>
+      normalizeIntentWithContext(
+        {
+          ...validIntent,
+          confidence: 0.91,
+          metadata: {
+            ...validIntent.metadata,
+            needsClarification: false,
+            sourceContext: []
+          }
+        },
+        {
+          tabId: 1,
+          url: "https://x.com/post",
+          title: "X post",
+          detectedTokens: [
+            {
+              symbol: "BONK",
+              source: "twitter",
+              confidence: 0.82
+            },
+            {
+              symbol: "WIF",
+              source: "twitter",
+              confidence: 0.81
+            }
+          ],
+          rawHints: ["buy", "bonk", "wif"],
+          detectedAt: "2026-04-19T00:00:00.000Z"
+        },
+        userInput
+      )
+    );
+    const scanRisk = vi.fn(createMockRiskAdapter().scanRisk);
+    const buildPreview = vi.fn(createMockPreviewAdapter().buildPreview);
+    const router = createMessageRouter(undefined, {
+      parseIntent,
+      scanRisk,
+      buildPreview
+    });
+
+    const events = await router.handleIntentRequest({
+      type: "intent.parse.requested",
+      payload: {
+        requestId: "req-context-clarify",
+        tabId: 1,
+        userInput: "buy this",
+        contextSnapshot: {
+          tabId: 1,
+          url: "https://x.com/post",
+          title: "X post",
+          detectedTokens: [],
+          rawHints: [],
+          detectedAt: "2026-04-19T00:00:00.000Z"
+        }
+      }
+    });
+
+    expect(scanRisk).not.toHaveBeenCalled();
+    expect(buildPreview).not.toHaveBeenCalled();
+    expect(getWorkflowStates(events).at(-1)?.payload).toEqual({
+      requestId: "req-context-clarify",
+      phase: "idle",
+      reason: "clarification-required"
+    });
+  });
+
+  it("still short-circuits to clarification when mint guardrails reject weak page evidence", async () => {
+    const parseIntent = vi.fn(async (userInput: string) =>
+      normalizeIntentWithContext(
+        {
+          ...validIntent,
+          confidence: 0.89,
+          metadata: {
+            ...validIntent.metadata,
+            needsClarification: false,
+            sourceContext: []
+          }
+        },
+        {
+          tabId: 1,
+          url: "https://example.com/post",
+          title: "Token thread",
+          detectedTokens: [],
+          rawHints: ["moon", "buy"],
+          detectedAt: "2026-04-19T00:00:00.000Z"
+        },
+        userInput
+      )
+    );
+    const scanRisk = vi.fn(createMockRiskAdapter().scanRisk);
+    const buildPreview = vi.fn(createMockPreviewAdapter().buildPreview);
+    const router = createMessageRouter(undefined, {
+      parseIntent,
+      scanRisk,
+      buildPreview
+    });
+
+    const events = await router.handleIntentRequest({
+      type: "intent.parse.requested",
+      payload: {
+        requestId: "req-mint-guardrail",
+        tabId: 1,
+        userInput: "buy this",
+        contextSnapshot: {
+          tabId: 1,
+          url: "https://example.com/post",
+          title: "Token thread",
+          detectedTokens: [],
+          rawHints: ["moon", "buy"],
+          detectedAt: "2026-04-19T00:00:00.000Z"
+        }
+      }
+    });
+
+    expect(scanRisk).not.toHaveBeenCalled();
+    expect(buildPreview).not.toHaveBeenCalled();
+    const parsedIntent = await parseIntent.mock.results[0]?.value;
+    expect(parsedIntent?.metadata.clarification?.kind).toBe(
+      "unknown-output-mint"
+    );
+    expect(getWorkflowStates(events).at(-1)?.payload).toEqual({
+      requestId: "req-mint-guardrail",
       phase: "idle",
       reason: "clarification-required"
     });
@@ -693,14 +962,17 @@ describe("workflow engine", () => {
   });
 
   it("emits a failed state when preview generation fails", async () => {
-    const router = createMessageRouter();
+    const router = createMessageRouter(undefined, {
+      ...createMockRuntimeServices(),
+      buildPreview: createMockPreviewAdapter().buildPreview
+    });
 
     const events = await router.handleIntentRequest({
       type: "intent.parse.requested",
       payload: {
         requestId: "req-preview-fail",
         tabId: 1,
-        userInput: "buy 1 SOL of this",
+        userInput: "preview-fail",
         contextSnapshot: {
           tabId: 1,
           url: "https://example.com",

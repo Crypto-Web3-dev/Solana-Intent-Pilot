@@ -35,6 +35,7 @@ export type WorkflowReason =
   | "risk-check-failed"
   | "quote-failed"
   | "simulation-failed"
+  | "unsupported-page"
   | "signature-cancelled"
   | "submit-failed"
   | "confirmed";

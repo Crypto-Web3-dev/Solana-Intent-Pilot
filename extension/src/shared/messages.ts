@@ -124,6 +124,32 @@ export interface WorkflowStateChangedMessage {
   };
 }
 
+export interface WalletSubmissionRequestedMessage {
+  type: "wallet.submission.requested";
+  payload: {
+    requestId: string;
+    intent: SIPIntent;
+    preview: ExecutionPreview;
+  };
+}
+
+export interface WalletSubmissionCompletedMessage {
+  type: "wallet.submission.completed";
+  payload: {
+    requestId: string;
+    signature: string;
+    explorerUrl?: string;
+  };
+}
+
+export interface WalletSubmissionFailedMessage {
+  type: "wallet.submission.failed";
+  payload: {
+    requestId: string;
+    reason: string;
+  };
+}
+
 export type SIPRuntimeMessage =
   | ContextDetectedMessage
   | ContextClearedMessage
@@ -139,4 +165,7 @@ export type SIPRuntimeMessage =
   | TransactionSubmittedMessage
   | TransactionFailedMessage
   | TransactionSettledMessage
+  | WalletSubmissionRequestedMessage
+  | WalletSubmissionCompletedMessage
+  | WalletSubmissionFailedMessage
   | WorkflowStateChangedMessage;

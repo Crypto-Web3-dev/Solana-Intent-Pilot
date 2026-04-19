@@ -1,9 +1,5 @@
-import {
-  mockExecutionPreview,
-  mockParseIntent,
-  mockRiskScan
-} from "./mock-services";
 import { createWorkflowEngine } from "./workflow-engine";
+import { createMockRuntimeServices } from "./runtime-services";
 import type { SIPIntent } from "../shared/intent";
 import type {
   ExecutionCancelledMessage,
@@ -29,6 +25,9 @@ type WorkflowStateSnapshot = {
   reason?: WorkflowReason;
 };
 
+type WorkflowEngine = ReturnType<typeof createWorkflowEngine>;
+type RuntimeServices = ReturnType<typeof createMockRuntimeServices>;
+
 function createStateChangedMessage(
   requestId: string,
   phaseState: WorkflowStateSnapshot | undefined
@@ -42,18 +41,26 @@ function createStateChangedMessage(
   };
 }
 
-export function createMessageRouter() {
-  const engine = createWorkflowEngine();
+export function createMessageRouter(
+  engine: WorkflowEngine = createWorkflowEngine(),
+  services: RuntimeServices = createMockRuntimeServices()
+) {
+  const lastIntentByRequestId = new Map<string, SIPIntent>();
+  const lastPreviewByRequestId = new Map<string, ExecutionPreviewReadyMessage["payload"]>();
 
   function pushState(events: SIPRuntimeMessage[], requestId: string) {
     events.push(createStateChangedMessage(requestId, engine.getState(requestId)));
+  }
+
+  function releaseState(requestId: string) {
+    engine.clearState(requestId);
   }
 
   return {
     async handleIntentRequest(
       message: IntentParseRequestedMessage
     ): Promise<SIPRuntimeMessage[]> {
-      const { requestId, userInput } = message.payload;
+      const { requestId, userInput, contextSnapshot } = message.payload;
       const events: SIPRuntimeMessage[] = [];
       let intent: SIPIntent;
 
@@ -61,7 +68,7 @@ export function createMessageRouter() {
       pushState(events, requestId);
 
       try {
-        intent = await mockParseIntent(userInput);
+        intent = await services.parseIntent(userInput, contextSnapshot);
       } catch (error) {
         const reason = error instanceof Error ? error.message : "Intent parse failed";
 
@@ -75,6 +82,7 @@ export function createMessageRouter() {
         } satisfies IntentParseFailedMessage);
         engine.handleFailure(requestId, "intent-invalid");
         pushState(events, requestId);
+        releaseState(requestId);
 
         return events;
       }
@@ -86,11 +94,13 @@ export function createMessageRouter() {
           intent
         }
       } satisfies IntentParseSucceededMessage);
+      lastIntentByRequestId.set(requestId, intent);
 
       engine.handleParsedIntent(requestId, intent);
       pushState(events, requestId);
 
       if (engine.getState(requestId)?.phase === "idle") {
+        releaseState(requestId);
         return events;
       }
 
@@ -105,7 +115,7 @@ export function createMessageRouter() {
         } satisfies RiskScanRequestedMessage);
 
         try {
-          const report = await mockRiskScan(intent);
+          const report = await services.scanRisk(intent);
           events.push({
             type: "risk.scan.completed",
             payload: {
@@ -118,6 +128,7 @@ export function createMessageRouter() {
           pushState(events, requestId);
 
           if (engine.getState(requestId)?.phase === "blocked") {
+            releaseState(requestId);
             return events;
           }
         } catch (error) {
@@ -125,6 +136,7 @@ export function createMessageRouter() {
 
           engine.handleFailure(requestId, "risk-check-failed");
           pushState(events, requestId);
+          releaseState(requestId);
           return events;
         }
       }
@@ -133,13 +145,14 @@ export function createMessageRouter() {
       pushState(events, requestId);
 
       try {
-        const preview = await mockExecutionPreview(requestId);
+        const preview = await services.buildPreview(requestId, intent);
         engine.handlePreviewReady(requestId);
         pushState(events, requestId);
         events.push({
           type: "execution.preview.ready",
           payload: preview
         } satisfies ExecutionPreviewReadyMessage);
+        lastPreviewByRequestId.set(requestId, preview);
       } catch (error) {
         const reason = error instanceof Error ? error.message : "simulation-failed";
 
@@ -153,14 +166,20 @@ export function createMessageRouter() {
           }
         } satisfies ExecutionPreviewFailedMessage);
         pushState(events, requestId);
+        releaseState(requestId);
       }
 
       return events;
     },
-    handleExecutionConfirmed(
+    async handleExecutionConfirmed(
       message: ExecutionConfirmedMessage
-    ): SIPRuntimeMessage[] {
+    ): Promise<SIPRuntimeMessage[]> {
       const { requestId } = message.payload;
+      const state = engine.getState(requestId);
+
+      if (state?.phase !== "awaiting-signature") {
+        return [createStateChangedMessage(requestId, state)];
+      }
 
       engine.handleExecutionConfirmed(requestId);
 
@@ -172,8 +191,12 @@ export function createMessageRouter() {
       const { requestId } = message.payload;
 
       engine.handleExecutionCancelled(requestId);
+      lastIntentByRequestId.delete(requestId);
+      lastPreviewByRequestId.delete(requestId);
+      const events = [createStateChangedMessage(requestId, engine.getState(requestId))];
+      releaseState(requestId);
 
-      return [createStateChangedMessage(requestId, engine.getState(requestId))];
+      return events;
     },
     handleTransactionSubmitted(
       message: TransactionSubmittedMessage
@@ -190,8 +213,12 @@ export function createMessageRouter() {
       const { requestId } = message.payload;
 
       engine.handleSubmitFailed(requestId);
+      lastIntentByRequestId.delete(requestId);
+      lastPreviewByRequestId.delete(requestId);
+      const events = [createStateChangedMessage(requestId, engine.getState(requestId))];
+      releaseState(requestId);
 
-      return [createStateChangedMessage(requestId, engine.getState(requestId))];
+      return events;
     },
     handleTransactionSettled(
       message: TransactionSettledMessage
@@ -199,8 +226,12 @@ export function createMessageRouter() {
       const { requestId } = message.payload;
 
       engine.handleTransactionSettled(requestId);
+      lastIntentByRequestId.delete(requestId);
+      lastPreviewByRequestId.delete(requestId);
+      const events = [createStateChangedMessage(requestId, engine.getState(requestId))];
+      releaseState(requestId);
 
-      return [createStateChangedMessage(requestId, engine.getState(requestId))];
+      return events;
     }
   };
 }

@@ -16,13 +16,31 @@ export function RiskIndicator({
     return <div>Risk: no report yet</div>;
   }
 
+  const sourceLabel =
+    risk.source === "wasm" ? "Wasm" : "policy fallback";
+
   if (risk.level === "unknown") {
-    return <div>Risk: unknown - data is incomplete</div>;
+    return (
+      <div>
+        <div>Risk: unknown - data is incomplete</div>
+        <div>Risk source: {sourceLabel}</div>
+      </div>
+    );
   }
 
   if (risk.blocking) {
-    return <div>Risk: blocked - {risk.summary}</div>;
+    return (
+      <div>
+        <div>Risk: blocked - {risk.summary}</div>
+        <div>Risk source: {sourceLabel}</div>
+      </div>
+    );
   }
 
-  return <div>Risk: {risk.level}</div>;
+  return (
+    <div>
+      <div>Risk: {risk.level}</div>
+      <div>Risk source: {sourceLabel}</div>
+    </div>
+  );
 }

@@ -62,6 +62,13 @@ export async function mockParseIntent(input: string): Promise<SIPIntent> {
     });
   }
 
+  if (input.includes("preview-fail")) {
+    return createMockSwapIntent({
+      outputMint: "preview-fail-mint-address",
+      requiresRiskScan: true
+    });
+  }
+
   if (input.includes("transfer")) {
     return createMockTransferIntent();
   }
@@ -89,6 +96,7 @@ export async function mockRiskScan(intent: SIPIntent): Promise<SecurityReport> {
 
   if (intent.payload.outputMint.includes("blocked")) {
     return {
+      source: "policy-fallback",
       score: 10,
       level: "high",
       blocking: true,
@@ -105,6 +113,7 @@ export async function mockRiskScan(intent: SIPIntent): Promise<SecurityReport> {
   }
 
   return {
+    source: "policy-fallback",
     score: 90,
     level: "low",
     blocking: false,

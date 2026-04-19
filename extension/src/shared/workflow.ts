@@ -22,6 +22,7 @@ export const WORKFLOW_REASONS = [
   "risk-check-failed",
   "quote-failed",
   "simulation-failed",
+  "unsupported-page",
   "signature-cancelled",
   "submit-failed",
   "confirmed"
