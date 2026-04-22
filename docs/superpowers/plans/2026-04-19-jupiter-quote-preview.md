@@ -36,7 +36,7 @@ Validation:
 - Create: `extension/tests/background/quote-adapter.test.ts`
 - Modify: `extension/src/background/quote-adapter.ts`
 
-- [ ] **Step 1: Write the failing test for successful Jupiter mapping**
+- [x] **Step 1: Write the failing test for successful Jupiter mapping**
 
 ```ts
 import { describe, expect, it, vi } from "vitest";
@@ -63,12 +63,12 @@ describe("default quote adapter", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm -C extension test -- quote-adapter.test.ts`
 Expected: FAIL because `createDefaultQuoteAdapter` does not exist yet
 
-- [ ] **Step 3: Add the fallback test for provider failure**
+- [x] **Step 3: Add the fallback test for provider failure**
 
 ```ts
 it("falls back to the mock adapter when Jupiter fetch fails", async () => {
@@ -83,7 +83,7 @@ it("falls back to the mock adapter when Jupiter fetch fails", async () => {
 });
 ```
 
-- [ ] **Step 4: Add the fallback test for malformed provider data**
+- [x] **Step 4: Add the fallback test for malformed provider data**
 
 ```ts
 it("falls back to mock when Jupiter returns unusable data", async () => {
@@ -100,7 +100,7 @@ it("falls back to mock when Jupiter returns unusable data", async () => {
 });
 ```
 
-- [ ] **Step 5: Run the focused test file again**
+- [x] **Step 5: Run the focused test file again**
 
 Run: `pnpm -C extension test -- quote-adapter.test.ts`
 Expected: FAIL with missing implementation, not syntax errors
@@ -110,7 +110,7 @@ Expected: FAIL with missing implementation, not syntax errors
 **Files:**
 - Modify: `extension/src/background/quote-adapter.ts`
 
-- [ ] **Step 1: Add the Jupiter response types and helper**
+- [x] **Step 1: Add the Jupiter response types and helper**
 
 ```ts
 type JupiterQuoteResponse = {
@@ -125,7 +125,7 @@ function isUsableQuoteResponse(
 }
 ```
 
-- [ ] **Step 2: Add the live adapter implementation**
+- [x] **Step 2: Add the live adapter implementation**
 
 ```ts
 export function createJupiterQuoteAdapter(options?: {
@@ -171,7 +171,7 @@ export function createJupiterQuoteAdapter(options?: {
 }
 ```
 
-- [ ] **Step 3: Add the default adapter with fallback**
+- [x] **Step 3: Add the default adapter with fallback**
 
 ```ts
 export function createDefaultQuoteAdapter(options?: {
@@ -194,7 +194,7 @@ export function createDefaultQuoteAdapter(options?: {
 }
 ```
 
-- [ ] **Step 4: Run the focused quote adapter tests**
+- [x] **Step 4: Run the focused quote adapter tests**
 
 Run: `pnpm -C extension test -- quote-adapter.test.ts`
 Expected: PASS
@@ -205,7 +205,7 @@ Expected: PASS
 - Modify: `extension/src/background/preview-adapter.ts`
 - Modify: `extension/src/background/runtime-services.ts`
 
-- [ ] **Step 1: Switch preview adapter defaults to the new default quote adapter**
+- [x] **Step 1: Switch preview adapter defaults to the new default quote adapter**
 
 ```ts
 import { createDefaultQuoteAdapter, createMockQuoteAdapter } from "./quote-adapter";
@@ -213,7 +213,7 @@ import { createDefaultQuoteAdapter, createMockQuoteAdapter } from "./quote-adapt
 const quoteAdapter = options?.quoteAdapter ?? createDefaultQuoteAdapter();
 ```
 
-- [ ] **Step 2: Keep runtime services stable**
+- [x] **Step 2: Keep runtime services stable**
 
 ```ts
 export function createMockRuntimeServices(): RuntimeServices {
@@ -229,7 +229,7 @@ export function createMockRuntimeServices(): RuntimeServices {
 }
 ```
 
-- [ ] **Step 3: Run preview-related tests**
+- [x] **Step 3: Run preview-related tests**
 
 Run: `pnpm -C extension test -- workflow-engine.test.ts`
 Expected: PASS
@@ -240,21 +240,21 @@ Expected: PASS
 - Modify: `docs/superpowers/specs/2026-04-19-jupiter-quote-preview-design.md`
 - Modify: `docs/superpowers/plans/2026-04-19-jupiter-quote-preview.md`
 
-- [ ] **Step 1: Run type-check**
+- [x] **Step 1: Run type-check**
 
 Run: `pnpm -C extension exec tsc --noEmit --pretty false`
 Expected: PASS
 
-- [ ] **Step 2: Run the full extension test suite**
+- [x] **Step 2: Run the full extension test suite**
 
 Run: `pnpm -C extension test`
 Expected: PASS
 
-- [ ] **Step 3: Run the extension build**
+- [x] **Step 3: Run the extension build**
 
 Run: `pnpm -C extension build`
 Expected: PASS
 
-- [ ] **Step 4: Update docs if implementation differs from spec**
+- [x] **Step 4: Update docs if implementation differs from spec**
 
 Adjust the spec or plan inline if naming or fallback behavior changed during implementation.

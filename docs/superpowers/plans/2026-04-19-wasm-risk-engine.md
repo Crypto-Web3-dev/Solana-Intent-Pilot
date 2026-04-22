@@ -38,7 +38,7 @@ Validation:
 - Modify: `docs/api/runtime-contracts.md`
 - Possibly modify: `docs/security/mvp-risk-policy.md`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -60,12 +60,12 @@ describe("SecurityReport", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm -C extension test -- contracts.test.ts`
 Expected: TypeScript or Vitest failure because `SecurityReport` does not yet include `source`.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 ```ts
 export type RiskEngineSource = "wasm" | "policy-fallback";
@@ -82,12 +82,12 @@ export interface SecurityReport {
 
 Update the contract docs to say that the UI must show which engine produced the report, and that fallback remains valid but visible.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm -C extension test -- contracts.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add extension/src/shared/risk.ts extension/tests/shared/contracts.test.ts docs/api/runtime-contracts.md docs/security/mvp-risk-policy.md
@@ -103,7 +103,7 @@ git commit -m "feat: add visible risk engine source contract"
 - Create: `extension/tests/background/risk-adapter.test.ts`
 - Possibly modify: `extension/tests/background/workflow-engine.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -146,12 +146,12 @@ describe("risk adapter", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm -C extension test -- risk-adapter.test.ts`
 Expected: FAIL because `createDefaultRiskAdapter` does not yet accept an injected Wasm loader and `SecurityReport` does not yet expose `source`.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 ```ts
 export interface RiskAdapterDependencies {
@@ -197,12 +197,12 @@ export async function loadDefaultWasmRiskEngine(): Promise<WasmRiskEngine | null
 
 Keep the initial loader boring and explicit. It can return `null` until the module wiring is ready, but the adapter contract and fallback path must already be in place.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm -C extension test -- risk-adapter.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add extension/src/background/risk-adapter.ts extension/src/background/wasm-risk-engine.ts extension/src/background/runtime-services.ts extension/tests/background/risk-adapter.test.ts
@@ -216,7 +216,7 @@ git commit -m "feat: add wasm-first risk adapter with fallback"
 - Modify: `extension/tests/sidepanel/risk-indicator.test.tsx`
 - Possibly modify: `extension/src/sidepanel/components/ActionCard.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 import { describe, expect, it } from "vitest";
@@ -244,12 +244,12 @@ describe("RiskIndicator", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm -C extension test -- risk-indicator.test.tsx`
 Expected: FAIL because the component does not yet render the source label.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 ```tsx
 export function RiskIndicator({ risk, phase }: { risk: SecurityReport | null; phase: WorkflowPhase }) {
@@ -270,12 +270,12 @@ export function RiskIndicator({ risk, phase }: { risk: SecurityReport | null; ph
 
 Keep the source label visually secondary so it supports the risk verdict instead of competing with it.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm -C extension test -- risk-indicator.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add extension/src/sidepanel/components/RiskIndicator.tsx extension/tests/sidepanel/risk-indicator.test.tsx
@@ -287,7 +287,7 @@ git commit -m "feat: show active risk engine source in ui"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-19-wasm-risk-engine.md`
 
-- [ ] **Step 1: Run the focused tests**
+- [x] **Step 1: Run the focused tests**
 
 Run:
 
@@ -297,7 +297,7 @@ pnpm -C extension test -- contracts.test.ts risk-adapter.test.ts risk-indicator.
 
 Expected: PASS.
 
-- [ ] **Step 2: Run the full verification suite**
+- [x] **Step 2: Run the full verification suite**
 
 Run:
 
@@ -309,7 +309,7 @@ pnpm -C extension build
 
 Expected: all PASS.
 
-- [ ] **Step 3: Update the plan with execution status**
+- [x] **Step 3: Update the plan with execution status**
 
 Add a short `Execution Status` note to the top of this plan that records:
 
@@ -317,7 +317,7 @@ Add a short `Execution Status` note to the top of this plan that records:
 - what fallback behavior remains in place
 - what validation commands passed
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/superpowers/plans/2026-04-19-wasm-risk-engine.md

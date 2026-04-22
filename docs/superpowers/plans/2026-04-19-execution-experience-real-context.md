@@ -44,7 +44,7 @@ Notes:
 - Create: `extension/tests/background/simulation-adapter.test.ts`
 - Modify: `extension/src/background/simulation-adapter.ts`
 
-- [ ] **Step 1: Write the failing test for live RPC preflight success**
+- [x] **Step 1: Write the failing test for live RPC preflight success**
 
 ```ts
 it("uses an RPC preflight response when the provider is healthy", async () => {
@@ -66,12 +66,12 @@ it("uses an RPC preflight response when the provider is healthy", async () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run: `pnpm -C extension test -- simulation-adapter.test.ts`
 Expected: FAIL because `createDefaultSimulationAdapter` does not exist yet
 
-- [ ] **Step 3: Add the fallback-on-network-failure test**
+- [x] **Step 3: Add the fallback-on-network-failure test**
 
 ```ts
 it("falls back to the mock adapter when the RPC preflight fails", async () => {
@@ -84,7 +84,7 @@ it("falls back to the mock adapter when the RPC preflight fails", async () => {
 });
 ```
 
-- [ ] **Step 4: Add the malformed-response fallback test**
+- [x] **Step 4: Add the malformed-response fallback test**
 
 ```ts
 it("falls back to a custom adapter when the provider data is malformed", async () => {
@@ -113,7 +113,7 @@ it("falls back to a custom adapter when the provider data is malformed", async (
 });
 ```
 
-- [ ] **Step 5: Run the focused test again**
+- [x] **Step 5: Run the focused test again**
 
 Run: `pnpm -C extension test -- simulation-adapter.test.ts`
 Expected: FAIL for missing implementation only
@@ -124,7 +124,7 @@ Expected: FAIL for missing implementation only
 - Modify: `extension/src/background/simulation-adapter.ts`
 - Modify: `extension/src/background/preview-adapter.ts`
 
-- [ ] **Step 1: Add the RPC preflight response types and validation helper**
+- [x] **Step 1: Add the RPC preflight response types and validation helper**
 
 ```ts
 type RpcPreflightResponse = {
@@ -149,7 +149,7 @@ function isUsablePreflightResponse(
 }
 ```
 
-- [ ] **Step 2: Add the RPC preflight adapter**
+- [x] **Step 2: Add the RPC preflight adapter**
 
 ```ts
 export function createRpcPreflightSimulationAdapter(options?: {
@@ -194,7 +194,7 @@ export function createRpcPreflightSimulationAdapter(options?: {
 }
 ```
 
-- [ ] **Step 3: Add the default simulation adapter with fallback**
+- [x] **Step 3: Add the default simulation adapter with fallback**
 
 ```ts
 export function createDefaultSimulationAdapter(options?: {
@@ -218,14 +218,14 @@ export function createDefaultSimulationAdapter(options?: {
 }
 ```
 
-- [ ] **Step 4: Switch preview defaults to the new simulation adapter**
+- [x] **Step 4: Switch preview defaults to the new simulation adapter**
 
 ```ts
 const simulationAdapter =
   options?.simulationAdapter ?? createDefaultSimulationAdapter();
 ```
 
-- [ ] **Step 5: Run the focused simulation tests**
+- [x] **Step 5: Run the focused simulation tests**
 
 Run: `pnpm -C extension test -- simulation-adapter.test.ts`
 Expected: PASS
@@ -237,7 +237,7 @@ Expected: PASS
 - Modify: `extension/src/sidepanel/components/ActionCard.tsx`
 - Modify: `extension/src/sidepanel/hooks/useSidePanelState.ts`
 
-- [ ] **Step 1: Write the failing wallet-missing UI test**
+- [x] **Step 1: Write the failing wallet-missing UI test**
 
 ```tsx
 it("shows a wallet-missing hint while waiting for signature", () => {
@@ -260,7 +260,7 @@ it("shows a wallet-missing hint while waiting for signature", () => {
 });
 ```
 
-- [ ] **Step 2: Add the connecting-state test**
+- [x] **Step 2: Add the connecting-state test**
 
 ```tsx
 it("shows an in-progress wallet message while signing", () => {
@@ -284,7 +284,7 @@ it("shows an in-progress wallet message while signing", () => {
 });
 ```
 
-- [ ] **Step 3: Run the focused ActionCard tests**
+- [x] **Step 3: Run the focused ActionCard tests**
 
 Run: `pnpm -C extension test -- action-card.test.tsx`
 Expected: FAIL because wallet-state props and messaging do not exist yet
@@ -298,7 +298,7 @@ Expected: FAIL because wallet-state props and messaging do not exist yet
 - Modify: `extension/src/sidepanel/components/ActionCard.tsx`
 - Modify: `extension/src/sidepanel/pages/SidePanelPage.tsx`
 
-- [ ] **Step 1: Add the wallet-state type**
+- [x] **Step 1: Add the wallet-state type**
 
 ```ts
 export type WalletStatus =
@@ -312,7 +312,7 @@ export type WalletStatus =
   | "failed";
 ```
 
-- [ ] **Step 2: Add wallet detection in the bridge**
+- [x] **Step 2: Add wallet detection in the bridge**
 
 ```ts
 export async function detectWalletStatus(): Promise<WalletStatus> {
@@ -337,14 +337,14 @@ export async function detectWalletStatus(): Promise<WalletStatus> {
 }
 ```
 
-- [ ] **Step 3: Add local wallet state to the side panel hook**
+- [x] **Step 3: Add local wallet state to the side panel hook**
 
 ```ts
 const [walletStatus, setWalletStatus] = useState<WalletStatus>("unknown");
 const [isSigning, setIsSigning] = useState(false);
 ```
 
-- [ ] **Step 4: Detect wallet status on `awaiting-signature`**
+- [x] **Step 4: Detect wallet status on `awaiting-signature`**
 
 ```ts
 useEffect(() => {
@@ -373,7 +373,7 @@ useEffect(() => {
 }, [phase]);
 ```
 
-- [ ] **Step 5: Render wallet-aware messaging in `ActionCard`**
+- [x] **Step 5: Render wallet-aware messaging in `ActionCard`**
 
 ```tsx
 const isWalletReady = walletStatus === "ready";
@@ -384,7 +384,7 @@ const walletHint = walletMessage(walletStatus, isSigning);
 </button>
 ```
 
-- [ ] **Step 6: Run the focused ActionCard tests**
+- [x] **Step 6: Run the focused ActionCard tests**
 
 Run: `pnpm -C extension test -- action-card.test.tsx`
 Expected: PASS
@@ -395,7 +395,7 @@ Expected: PASS
 - Create: `extension/tests/sidepanel/page-context.test.ts`
 - Create or expand: `extension/src/sidepanel/page-context.ts`
 
-- [ ] **Step 1: Write the test for choosing the real page tab**
+- [x] **Step 1: Write the test for choosing the real page tab**
 
 ```ts
 it("returns the first normal webpage in the current window", () => {
@@ -411,7 +411,7 @@ it("returns the first normal webpage in the current window", () => {
 });
 ```
 
-- [ ] **Step 2: Write the test for missing normal pages**
+- [x] **Step 2: Write the test for missing normal pages**
 
 ```ts
 it("returns null when no normal webpage is available", () => {
@@ -424,7 +424,7 @@ it("returns null when no normal webpage is available", () => {
 });
 ```
 
-- [ ] **Step 3: Add the raw-hint extraction test**
+- [x] **Step 3: Add the raw-hint extraction test**
 
 ```ts
 it("extracts lightweight raw hints from page text", () => {
@@ -434,7 +434,7 @@ it("extracts lightweight raw hints from page text", () => {
 });
 ```
 
-- [ ] **Step 4: Run the focused page-context tests**
+- [x] **Step 4: Run the focused page-context tests**
 
 Run: `pnpm -C extension test -- page-context.test.ts`
 Expected: FAIL because helpers do not exist yet
@@ -445,7 +445,7 @@ Expected: FAIL because helpers do not exist yet
 - Create or expand: `extension/src/sidepanel/page-context.ts`
 - Modify: `extension/src/sidepanel/hooks/useSidePanelState.ts`
 
-- [ ] **Step 1: Add page selection and hint helpers**
+- [x] **Step 1: Add page selection and hint helpers**
 
 ```ts
 export function selectCurrentPageContext(
@@ -470,7 +470,7 @@ export function selectCurrentPageContext(
 }
 ```
 
-- [ ] **Step 2: Add `getCurrentPageContext()` using tabs plus scripting**
+- [x] **Step 2: Add `getCurrentPageContext()` using tabs plus scripting**
 
 ```ts
 export async function getCurrentPageContext() {
@@ -517,7 +517,7 @@ export async function getCurrentPageContext() {
 }
 ```
 
-- [ ] **Step 3: Replace hardcoded submit context with `getCurrentPageContext()`**
+- [x] **Step 3: Replace hardcoded submit context with `getCurrentPageContext()`**
 
 ```ts
 const pageContext = await getCurrentPageContext();
@@ -532,7 +532,7 @@ if (!pageContext) {
 }
 ```
 
-- [ ] **Step 4: Run the focused page-context and sidepanel tests**
+- [x] **Step 4: Run the focused page-context and sidepanel tests**
 
 Run: `pnpm -C extension test -- page-context.test.ts sidepanel.test.tsx`
 Expected: PASS
@@ -543,7 +543,7 @@ Expected: PASS
 - Modify: `extension/tests/sidepanel/page-context.test.ts`
 - Modify: `extension/src/sidepanel/page-context.ts`
 
-- [ ] **Step 1: Add the `x.com` cashtag test**
+- [x] **Step 1: Add the `x.com` cashtag test**
 
 ```ts
 it("extracts token hints for x.com cashtags", () => {
@@ -559,7 +559,7 @@ it("extracts token hints for x.com cashtags", () => {
 });
 ```
 
-- [ ] **Step 2: Add the Dexscreener mint-hint test**
+- [x] **Step 2: Add the Dexscreener mint-hint test**
 
 ```ts
 it("extracts a high-confidence mint hint from Dexscreener pages", () => {
@@ -580,7 +580,7 @@ it("extracts a high-confidence mint hint from Dexscreener pages", () => {
 });
 ```
 
-- [ ] **Step 3: Run the focused page-context tests**
+- [x] **Step 3: Run the focused page-context tests**
 
 Run: `pnpm -C extension test -- page-context.test.ts`
 Expected: FAIL because `extractDetectedTokens` does not exist yet
@@ -590,7 +590,7 @@ Expected: FAIL because `extractDetectedTokens` does not exist yet
 **Files:**
 - Modify: `extension/src/sidepanel/page-context.ts`
 
-- [ ] **Step 1: Add source detection and dedupe helpers**
+- [x] **Step 1: Add source detection and dedupe helpers**
 
 ```ts
 function detectSource(url: string): TokenHint["source"] {
@@ -610,7 +610,7 @@ function detectSource(url: string): TokenHint["source"] {
 }
 ```
 
-- [ ] **Step 2: Add `extractDetectedTokens(url, text)`**
+- [x] **Step 2: Add `extractDetectedTokens(url, text)`**
 
 ```ts
 export function extractDetectedTokens(url: string, text: string) {
@@ -625,13 +625,13 @@ export function extractDetectedTokens(url: string, text: string) {
 }
 ```
 
-- [ ] **Step 3: Use detected tokens inside page-context scripting**
+- [x] **Step 3: Use detected tokens inside page-context scripting**
 
 ```ts
 const detectedTokens = extractDetectedTokensLikeLogic(window.location.href, pageText);
 ```
 
-- [ ] **Step 4: Run the focused page-context tests**
+- [x] **Step 4: Run the focused page-context tests**
 
 Run: `pnpm -C extension test -- page-context.test.ts`
 Expected: PASS
@@ -642,21 +642,21 @@ Expected: PASS
 - Modify: `docs/superpowers/specs/2026-04-19-execution-experience-real-context-design.md`
 - Modify: `docs/superpowers/plans/2026-04-19-execution-experience-real-context.md`
 
-- [ ] **Step 1: Run type-check**
+- [x] **Step 1: Run type-check**
 
 Run: `pnpm -C extension exec tsc --noEmit --pretty false`
 Expected: PASS
 
-- [ ] **Step 2: Run the full extension test suite**
+- [x] **Step 2: Run the full extension test suite**
 
 Run: `pnpm -C extension test`
 Expected: PASS
 
-- [ ] **Step 3: Run the extension build**
+- [x] **Step 3: Run the extension build**
 
 Run: `pnpm -C extension build`
 Expected: PASS
 
-- [ ] **Step 4: Update docs if implementation differs from plan**
+- [x] **Step 4: Update docs if implementation differs from plan**
 
 Adjust the spec or plan inline if naming or exact UI wording changed during implementation.

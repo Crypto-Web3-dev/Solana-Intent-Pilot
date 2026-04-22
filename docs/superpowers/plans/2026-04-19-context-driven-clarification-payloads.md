@@ -31,7 +31,7 @@ Verification completed:
 - Modify: `extension/src/shared/intent.ts`
 - Modify: `extension/tests/shared/contracts.test.ts`
 
-- [ ] **Step 1: Add the clarification payload types to `intent.ts`**
+- [x] **Step 1: Add the clarification payload types to `intent.ts`**
 
 ```ts
 export type ClarificationKind =
@@ -47,7 +47,7 @@ export interface ClarificationPayload {
 }
 ```
 
-- [ ] **Step 2: Extend `SIPIntent.metadata`**
+- [x] **Step 2: Extend `SIPIntent.metadata`**
 
 ```ts
 metadata: {
@@ -59,7 +59,7 @@ metadata: {
 }
 ```
 
-- [ ] **Step 3: Add a shared-contract test**
+- [x] **Step 3: Add a shared-contract test**
 
 ```ts
 it("allows optional clarification metadata on SIPIntent", () => {
@@ -80,7 +80,7 @@ it("allows optional clarification metadata on SIPIntent", () => {
 });
 ```
 
-- [ ] **Step 4: Run shared-contract tests**
+- [x] **Step 4: Run shared-contract tests**
 
 Run: `pnpm -C extension test -- contracts.test.ts`
 Expected: PASS
@@ -90,7 +90,7 @@ Expected: PASS
 **Files:**
 - Modify: `extension/tests/background/openai-intent-parser.test.ts`
 
-- [ ] **Step 1: Add the missing-output-mint test**
+- [x] **Step 1: Add the missing-output-mint test**
 
 ```ts
 it("produces missing-output-mint clarification when no candidate exists", () => {
@@ -98,7 +98,7 @@ it("produces missing-output-mint clarification when no candidate exists", () => 
 });
 ```
 
-- [ ] **Step 2: Add the unknown-output-mint test**
+- [x] **Step 2: Add the unknown-output-mint test**
 
 ```ts
 it("produces unknown-output-mint clarification for weak unresolved hints", () => {
@@ -106,7 +106,7 @@ it("produces unknown-output-mint clarification for weak unresolved hints", () =>
 });
 ```
 
-- [ ] **Step 3: Add the ambiguous-output-mint test**
+- [x] **Step 3: Add the ambiguous-output-mint test**
 
 ```ts
 it("produces ambiguous-output-mint clarification with candidate symbols", () => {
@@ -115,7 +115,7 @@ it("produces ambiguous-output-mint clarification with candidate symbols", () => 
 });
 ```
 
-- [ ] **Step 4: Add the underspecified-request test**
+- [x] **Step 4: Add the underspecified-request test**
 
 ```ts
 it("produces underspecified-request clarification for generic commands", () => {
@@ -123,7 +123,7 @@ it("produces underspecified-request clarification for generic commands", () => {
 });
 ```
 
-- [ ] **Step 5: Run focused parser tests to verify they fail**
+- [x] **Step 5: Run focused parser tests to verify they fail**
 
 Run: `pnpm -C extension test -- openai-intent-parser.test.ts`
 Expected: FAIL because clarification payload generation does not exist yet
@@ -133,7 +133,7 @@ Expected: FAIL because clarification payload generation does not exist yet
 **Files:**
 - Modify: `extension/src/background/openai-intent-parser.ts`
 
-- [ ] **Step 1: Add deterministic message builders**
+- [x] **Step 1: Add deterministic message builders**
 
 ```ts
 function buildClarificationMessage(kind: ClarificationKind) {
@@ -150,7 +150,7 @@ function buildClarificationMessage(kind: ClarificationKind) {
 }
 ```
 
-- [ ] **Step 2: Add a clarification payload helper**
+- [x] **Step 2: Add a clarification payload helper**
 
 ```ts
 function buildClarificationPayload(
@@ -161,14 +161,14 @@ function buildClarificationPayload(
 }
 ```
 
-- [ ] **Step 3: Attach clarification payload inside normalization**
+- [x] **Step 3: Attach clarification payload inside normalization**
 
 ```ts
 const clarification =
   needsClarification ? buildClarificationPayload(context, userInput) : undefined;
 ```
 
-- [ ] **Step 4: Return metadata with both `needsClarification` and `clarification`**
+- [x] **Step 4: Return metadata with both `needsClarification` and `clarification`**
 
 ```ts
 metadata: {
@@ -179,7 +179,7 @@ metadata: {
 }
 ```
 
-- [ ] **Step 5: Run focused parser tests**
+- [x] **Step 5: Run focused parser tests**
 
 Run: `pnpm -C extension test -- openai-intent-parser.test.ts`
 Expected: PASS
@@ -189,7 +189,7 @@ Expected: PASS
 **Files:**
 - Modify: `extension/tests/background/workflow-engine.test.ts`
 
-- [ ] **Step 1: Add a regression assertion that clarification payload does not change routing**
+- [x] **Step 1: Add a regression assertion that clarification payload does not change routing**
 
 ```ts
 it("still returns to idle when clarification payload is present", async () => {
@@ -197,7 +197,7 @@ it("still returns to idle when clarification payload is present", async () => {
 });
 ```
 
-- [ ] **Step 2: Run focused workflow tests**
+- [x] **Step 2: Run focused workflow tests**
 
 Run: `pnpm -C extension test -- workflow-engine.test.ts`
 Expected: PASS
@@ -207,22 +207,22 @@ Expected: PASS
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-19-context-driven-clarification-payloads.md`
 
-- [ ] **Step 1: Run type-check**
+- [x] **Step 1: Run type-check**
 
 Run: `pnpm -C extension exec tsc --noEmit --pretty false`
 Expected: PASS
 
-- [ ] **Step 2: Run full extension tests**
+- [x] **Step 2: Run full extension tests**
 
 Run: `pnpm -C extension test`
 Expected: PASS
 
-- [ ] **Step 3: Run production build**
+- [x] **Step 3: Run production build**
 
 Run: `pnpm -C extension build`
 Expected: PASS
 
-- [ ] **Step 4: Write execution status back into the plan**
+- [x] **Step 4: Write execution status back into the plan**
 
 Add an `Execution Status` section summarizing:
 

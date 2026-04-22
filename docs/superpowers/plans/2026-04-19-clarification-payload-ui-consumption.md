@@ -30,7 +30,7 @@ Verification completed:
 **Files:**
 - Modify: `extension/tests/sidepanel/action-card.test.tsx`
 
-- [ ] **Step 1: Add a missing-output-mint rendering test**
+- [x] **Step 1: Add a missing-output-mint rendering test**
 
 ```ts
 it("shows a missing token candidate clarification message", () => {
@@ -39,7 +39,7 @@ it("shows a missing token candidate clarification message", () => {
 });
 ```
 
-- [ ] **Step 2: Add an ambiguous-output-mint rendering test**
+- [x] **Step 2: Add an ambiguous-output-mint rendering test**
 
 ```ts
 it("shows candidate symbols for ambiguous token clarification", () => {
@@ -48,7 +48,7 @@ it("shows candidate symbols for ambiguous token clarification", () => {
 });
 ```
 
-- [ ] **Step 3: Add a fallback clarification rendering test**
+- [x] **Step 3: Add a fallback clarification rendering test**
 
 ```ts
 it("falls back to the generic clarification message when no payload is present", () => {
@@ -56,7 +56,7 @@ it("falls back to the generic clarification message when no payload is present",
 });
 ```
 
-- [ ] **Step 4: Run focused UI tests to verify they fail**
+- [x] **Step 4: Run focused UI tests to verify they fail**
 
 Run: `pnpm -C extension test -- action-card.test.tsx`
 Expected: FAIL because clarification payload rendering does not exist yet
@@ -66,7 +66,7 @@ Expected: FAIL because clarification payload rendering does not exist yet
 **Files:**
 - Modify: `extension/src/sidepanel/components/ActionCard.tsx`
 
-- [ ] **Step 1: Add clarification props**
+- [x] **Step 1: Add clarification props**
 
 ```ts
 import type { ClarificationPayload } from "../../shared/intent";
@@ -98,7 +98,7 @@ export function ActionCard({
 }) {
 ```
 
-- [ ] **Step 2: Add a deterministic clarification renderer**
+- [x] **Step 2: Add a deterministic clarification renderer**
 
 ```ts
 function clarificationMessage(kind: ClarificationPayload["kind"]) {
@@ -115,7 +115,7 @@ function clarificationMessage(kind: ClarificationPayload["kind"]) {
 }
 ```
 
-- [ ] **Step 3: Render clarification before confirm controls**
+- [x] **Step 3: Render clarification before confirm controls**
 
 ```tsx
 {phase === "idle" && reason === "clarification-required" ? (
@@ -129,7 +129,7 @@ function clarificationMessage(kind: ClarificationPayload["kind"]) {
 ) : null}
 ```
 
-- [ ] **Step 4: Keep existing blocked and failed rendering intact**
+- [x] **Step 4: Keep existing blocked and failed rendering intact**
 
 Do not change:
 
@@ -138,7 +138,7 @@ Do not change:
 - confirm / cancel controls
 - mock submission controls
 
-- [ ] **Step 5: Run focused UI tests**
+- [x] **Step 5: Run focused UI tests**
 
 Run: `pnpm -C extension test -- action-card.test.tsx`
 Expected: PASS
@@ -149,13 +149,13 @@ Expected: PASS
 - Modify: `extension/src/sidepanel/hooks/useSidePanelState.ts`
 - Modify: `extension/src/sidepanel/pages/SidePanelPage.tsx`
 
-- [ ] **Step 1: Track clarification payload in side panel state**
+- [x] **Step 1: Track clarification payload in side panel state**
 
 ```ts
 const [clarification, setClarification] = useState<ClarificationPayload | null>(null);
 ```
 
-- [ ] **Step 2: Populate clarification on parsed intent events**
+- [x] **Step 2: Populate clarification on parsed intent events**
 
 ```ts
 if (event.type === "intent.parse.succeeded") {
@@ -164,7 +164,7 @@ if (event.type === "intent.parse.succeeded") {
 }
 ```
 
-- [ ] **Step 3: Clear clarification on new requests**
+- [x] **Step 3: Clear clarification on new requests**
 
 ```ts
 function resetTransientState(nextRequestId: string) {
@@ -172,13 +172,13 @@ function resetTransientState(nextRequestId: string) {
 }
 ```
 
-- [ ] **Step 4: Pass clarification into ActionCard**
+- [x] **Step 4: Pass clarification into ActionCard**
 
 ```tsx
 <ActionCard clarification={state.clarification} ... />
 ```
 
-- [ ] **Step 5: Update the side panel state surface if needed**
+- [x] **Step 5: Update the side panel state surface if needed**
 
 Show clarification kind or summary only if it improves readability without adding clutter.
 
@@ -187,7 +187,7 @@ Show clarification kind or summary only if it improves readability without addin
 **Files:**
 - Modify: `extension/tests/background/workflow-engine.test.ts`
 
-- [ ] **Step 1: Add a regression test that clarification payload does not alter routing**
+- [x] **Step 1: Add a regression test that clarification payload does not alter routing**
 
 ```ts
 it("still returns to idle when clarification payload is present", async () => {
@@ -195,7 +195,7 @@ it("still returns to idle when clarification payload is present", async () => {
 });
 ```
 
-- [ ] **Step 2: Run focused workflow tests**
+- [x] **Step 2: Run focused workflow tests**
 
 Run: `pnpm -C extension test -- workflow-engine.test.ts`
 Expected: PASS
@@ -205,22 +205,22 @@ Expected: PASS
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-19-clarification-payload-ui-consumption.md`
 
-- [ ] **Step 1: Run type-check**
+- [x] **Step 1: Run type-check**
 
 Run: `pnpm -C extension exec tsc --noEmit --pretty false`
 Expected: PASS
 
-- [ ] **Step 2: Run full extension tests**
+- [x] **Step 2: Run full extension tests**
 
 Run: `pnpm -C extension test`
 Expected: PASS
 
-- [ ] **Step 3: Run production build**
+- [x] **Step 3: Run production build**
 
 Run: `pnpm -C extension build`
 Expected: PASS
 
-- [ ] **Step 4: Write execution status back into the plan**
+- [x] **Step 4: Write execution status back into the plan**
 
 Add an `Execution Status` section summarizing:
 

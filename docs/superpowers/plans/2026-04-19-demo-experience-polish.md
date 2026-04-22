@@ -33,7 +33,7 @@ Validation:
 - Modify: `extension/src/sidepanel/components/DetectionBar.tsx`
 - Modify: `extension/tests/sidepanel/sidepanel.test.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 import { describe, expect, it } from "vitest";
@@ -54,12 +54,12 @@ describe("SidePanelPage", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm -C extension test -- sidepanel.test.tsx`
 Expected: FAIL because the current shell copy still reads like a mock workflow panel.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 ```tsx
 <p style={{ margin: 0, color: "#94a3b8", lineHeight: 1.5 }}>
@@ -84,12 +84,12 @@ function phaseLabel(phase: WorkflowPhase) {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm -C extension test -- sidepanel.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add extension/src/sidepanel/pages/SidePanelPage.tsx extension/src/sidepanel/components/DetectionBar.tsx extension/tests/sidepanel/sidepanel.test.tsx
@@ -102,7 +102,7 @@ git commit -m "feat: tighten side panel shell copy"
 - Modify: `extension/src/sidepanel/components/ActionCard.tsx`
 - Modify: `extension/tests/sidepanel/action-card.test.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 import { describe, expect, it } from "vitest";
@@ -140,12 +140,12 @@ describe("ActionCard", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm -C extension test -- action-card.test.tsx`
 Expected: FAIL if the copy still feels scaffold-like or the state text is not aligned.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 ```tsx
 function phaseMessage(phase: WorkflowPhase, reason: WorkflowReason | string | null) {
@@ -197,12 +197,12 @@ For unsupported pages, keep the explicit action:
 ) : null}
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm -C extension test -- action-card.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add extension/src/sidepanel/components/ActionCard.tsx extension/tests/sidepanel/action-card.test.tsx
@@ -215,7 +215,7 @@ git commit -m "feat: polish execution card demo copy"
 - Modify: `extension/src/sidepanel/components/RiskIndicator.tsx`
 - Modify: `extension/tests/sidepanel/risk-indicator.test.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 import { describe, expect, it } from "vitest";
@@ -259,12 +259,12 @@ describe("RiskIndicator", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm -C extension test -- risk-indicator.test.tsx`
 Expected: FAIL if the risk card language is still too scaffold-like or the source label is missing from unknown state.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 ```tsx
 if (risk.level === "unknown") {
@@ -288,12 +288,12 @@ if (risk.blocking) {
 
 Keep the source label visually secondary and never success-like.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm -C extension test -- risk-indicator.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add extension/src/sidepanel/components/RiskIndicator.tsx extension/tests/sidepanel/risk-indicator.test.tsx
@@ -305,7 +305,7 @@ git commit -m "feat: polish risk state presentation"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-19-demo-experience-polish.md`
 
-- [ ] **Step 1: Run the focused side panel tests**
+- [x] **Step 1: Run the focused side panel tests**
 
 Run:
 
@@ -315,7 +315,7 @@ pnpm -C extension test -- sidepanel.test.tsx action-card.test.tsx risk-indicator
 
 Expected: PASS.
 
-- [ ] **Step 2: Run the full verification suite**
+- [x] **Step 2: Run the full verification suite**
 
 Run:
 
@@ -327,7 +327,7 @@ pnpm -C extension build
 
 Expected: all PASS.
 
-- [ ] **Step 3: Update the plan with execution status**
+- [x] **Step 3: Update the plan with execution status**
 
 Add a short `Execution Status` note to the top of this plan recording:
 
@@ -335,7 +335,7 @@ Add a short `Execution Status` note to the top of this plan recording:
 - the state-specific CTA and risk presentation updates
 - the validation commands that passed
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/superpowers/plans/2026-04-19-demo-experience-polish.md

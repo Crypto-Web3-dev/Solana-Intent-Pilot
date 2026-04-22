@@ -32,7 +32,7 @@ Verification completed:
 - Modify: `extension/tests/background/simulation-adapter.test.ts`
 - Modify: `extension/tests/background/workflow-engine.test.ts`
 
-- [ ] **Step 1: Add a live quote mapping test**
+- [x] **Step 1: Add a live quote mapping test**
 
 ```ts
 it("maps a live Jupiter quote response into QuoteResult", async () => {
@@ -40,7 +40,7 @@ it("maps a live Jupiter quote response into QuoteResult", async () => {
 });
 ```
 
-- [ ] **Step 2: Add a live simulation mapping test**
+- [x] **Step 2: Add a live simulation mapping test**
 
 ```ts
 it("maps a live RPC preflight response into SimulationResult", async () => {
@@ -48,7 +48,7 @@ it("maps a live RPC preflight response into SimulationResult", async () => {
 });
 ```
 
-- [ ] **Step 3: Add a quote fallback test**
+- [x] **Step 3: Add a quote fallback test**
 
 ```ts
 it("falls back to the mock quote adapter when live quote fetch fails", async () => {
@@ -56,7 +56,7 @@ it("falls back to the mock quote adapter when live quote fetch fails", async () 
 });
 ```
 
-- [ ] **Step 4: Add a simulation fallback test**
+- [x] **Step 4: Add a simulation fallback test**
 
 ```ts
 it("falls back to the mock simulation adapter when live simulation fetch fails", async () => {
@@ -64,7 +64,7 @@ it("falls back to the mock simulation adapter when live simulation fetch fails",
 });
 ```
 
-- [ ] **Step 5: Add a preview failure mapping test**
+- [x] **Step 5: Add a preview failure mapping test**
 
 ```ts
 it("treats preview composition failure as a failed workflow", async () => {
@@ -72,7 +72,7 @@ it("treats preview composition failure as a failed workflow", async () => {
 });
 ```
 
-- [ ] **Step 6: Run focused tests to verify they fail**
+- [x] **Step 6: Run focused tests to verify they fail**
 
 Run:
 
@@ -90,7 +90,7 @@ Expected: FAIL because the new live-first and failure-mapping assertions are not
 - Modify: `extension/src/background/quote-adapter.ts`
 - Modify: `extension/tests/background/quote-adapter.test.ts`
 
-- [ ] **Step 1: Keep live-first Jupiter mapping explicit**
+- [x] **Step 1: Keep live-first Jupiter mapping explicit**
 
 ```ts
 export function createJupiterQuoteAdapter(options?: {
@@ -101,7 +101,7 @@ export function createJupiterQuoteAdapter(options?: {
 }
 ```
 
-- [ ] **Step 2: Keep fallback order boring and deterministic**
+- [x] **Step 2: Keep fallback order boring and deterministic**
 
 ```ts
 export function createDefaultQuoteAdapter(options?: {
@@ -113,7 +113,7 @@ export function createDefaultQuoteAdapter(options?: {
 }
 ```
 
-- [ ] **Step 3: Run focused quote tests**
+- [x] **Step 3: Run focused quote tests**
 
 Run: `pnpm -C extension test -- quote-adapter.test.ts`
 Expected: PASS
@@ -124,7 +124,7 @@ Expected: PASS
 - Modify: `extension/src/background/simulation-adapter.ts`
 - Modify: `extension/tests/background/simulation-adapter.test.ts`
 
-- [ ] **Step 1: Keep live preflight mapping explicit**
+- [x] **Step 1: Keep live preflight mapping explicit**
 
 ```ts
 export function createRpcPreflightSimulationAdapter(options?: {
@@ -135,7 +135,7 @@ export function createRpcPreflightSimulationAdapter(options?: {
 }
 ```
 
-- [ ] **Step 2: Keep fallback order deterministic**
+- [x] **Step 2: Keep fallback order deterministic**
 
 ```ts
 export function createDefaultSimulationAdapter(options?: {
@@ -147,7 +147,7 @@ export function createDefaultSimulationAdapter(options?: {
 }
 ```
 
-- [ ] **Step 3: Run focused simulation tests**
+- [x] **Step 3: Run focused simulation tests**
 
 Run: `pnpm -C extension test -- simulation-adapter.test.ts`
 Expected: PASS
@@ -158,7 +158,7 @@ Expected: PASS
 - Modify: `extension/src/background/preview-adapter.ts`
 - Modify: `extension/tests/background/workflow-engine.test.ts`
 
-- [ ] **Step 1: Keep preview composition limited to quote + simulation**
+- [x] **Step 1: Keep preview composition limited to quote + simulation**
 
 ```ts
 const quote = await quoteAdapter.getQuote(intent);
@@ -166,13 +166,13 @@ const simulation = await simulationAdapter.simulate(intent);
 return combinePreview(requestId, quote, simulation);
 ```
 
-- [ ] **Step 2: Ensure failures still map to failed workflow states**
+- [x] **Step 2: Ensure failures still map to failed workflow states**
 
 ```ts
 engine.handleFailure(requestId, "simulation-failed");
 ```
 
-- [ ] **Step 3: Run focused workflow tests**
+- [x] **Step 3: Run focused workflow tests**
 
 Run: `pnpm -C extension test -- workflow-engine.test.ts`
 Expected: PASS
@@ -184,7 +184,7 @@ Expected: PASS
 - Modify: `extension/src/sidepanel/components/ActionCard.tsx`
 - Modify: `extension/tests/sidepanel/action-card.test.tsx`
 
-- [ ] **Step 1: Keep unknown risk visually distinct**
+- [x] **Step 1: Keep unknown risk visually distinct**
 
 ```ts
 if (risk.level === "unknown") {
@@ -192,7 +192,7 @@ if (risk.level === "unknown") {
 }
 ```
 
-- [ ] **Step 2: Keep preview failure distinct from success**
+- [x] **Step 2: Keep preview failure distinct from success**
 
 ```ts
 if (phase === "failed") {
@@ -200,7 +200,7 @@ if (phase === "failed") {
 }
 ```
 
-- [ ] **Step 3: Run focused UI tests**
+- [x] **Step 3: Run focused UI tests**
 
 Run: `pnpm -C extension test -- action-card.test.tsx`
 Expected: PASS
@@ -210,22 +210,22 @@ Expected: PASS
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-19-execution-preview-trueification.md`
 
-- [ ] **Step 1: Run type-check**
+- [x] **Step 1: Run type-check**
 
 Run: `pnpm -C extension exec tsc --noEmit --pretty false`
 Expected: PASS
 
-- [ ] **Step 2: Run full extension tests**
+- [x] **Step 2: Run full extension tests**
 
 Run: `pnpm -C extension test`
 Expected: PASS
 
-- [ ] **Step 3: Run production build**
+- [x] **Step 3: Run production build**
 
 Run: `pnpm -C extension build`
 Expected: PASS
 
-- [ ] **Step 4: Write execution status back into the plan**
+- [x] **Step 4: Write execution status back into the plan**
 
 Add an `Execution Status` section summarizing:
 

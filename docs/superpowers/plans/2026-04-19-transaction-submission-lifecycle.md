@@ -32,7 +32,7 @@ Verification completed:
 - Modify: `extension/tests/background/workflow-engine.test.ts`
 - Modify: `extension/tests/sidepanel/action-card.test.tsx`
 
-- [ ] **Step 1: Add a submitted-then-settled lifecycle test**
+- [x] **Step 1: Add a submitted-then-settled lifecycle test**
 
 ```ts
 it("records submitted and then confirmed when settlement arrives", async () => {
@@ -41,7 +41,7 @@ it("records submitted and then confirmed when settlement arrives", async () => {
 });
 ```
 
-- [ ] **Step 2: Add a submission timeout test**
+- [x] **Step 2: Add a submission timeout test**
 
 ```ts
 it("fails submission when settlement does not arrive before timeout", async () => {
@@ -50,7 +50,7 @@ it("fails submission when settlement does not arrive before timeout", async () =
 });
 ```
 
-- [ ] **Step 3: Add a one-retry transient failure test**
+- [x] **Step 3: Add a one-retry transient failure test**
 
 ```ts
 it("retries one transient submission failure before surfacing failure", async () => {
@@ -58,7 +58,7 @@ it("retries one transient submission failure before surfacing failure", async ()
 });
 ```
 
-- [ ] **Step 4: Add a UI test for submitted vs confirmed messaging**
+- [x] **Step 4: Add a UI test for submitted vs confirmed messaging**
 
 ```ts
 it("shows submitted and confirmed messaging distinctly", () => {
@@ -66,7 +66,7 @@ it("shows submitted and confirmed messaging distinctly", () => {
 });
 ```
 
-- [ ] **Step 5: Run focused tests to verify they fail**
+- [x] **Step 5: Run focused tests to verify they fail**
 
 Run:
 
@@ -82,7 +82,7 @@ Expected: FAIL because lifecycle handling and UI distinctions are not fully impl
 **Files:**
 - Create: `extension/src/background/submission-lifecycle.ts`
 
-- [ ] **Step 1: Add lifecycle state and timeout definitions**
+- [x] **Step 1: Add lifecycle state and timeout definitions**
 
 ```ts
 export type SubmissionOutcome = "submitted" | "settled" | "failed" | "timeout";
@@ -93,7 +93,7 @@ export interface SubmissionLifecycleOptions {
 }
 ```
 
-- [ ] **Step 2: Add a small helper for retry eligibility**
+- [x] **Step 2: Add a small helper for retry eligibility**
 
 ```ts
 export function canRetrySubmission(reason: string, attempt: number, maxRetries: number) {
@@ -102,7 +102,7 @@ export function canRetrySubmission(reason: string, attempt: number, maxRetries: 
 }
 ```
 
-- [ ] **Step 3: Add a helper for settlement timeout checks**
+- [x] **Step 3: Add a helper for settlement timeout checks**
 
 ```ts
 export function hasSubmissionTimedOut(startedAt: number, now: number, timeoutMs: number) {
@@ -116,21 +116,21 @@ export function hasSubmissionTimedOut(startedAt: number, now: number, timeoutMs:
 - Modify: `extension/src/background/message-router.ts`
 - Modify: `extension/src/background/workflow-engine.ts`
 
-- [ ] **Step 1: Track submission start and attempt count per request**
+- [x] **Step 1: Track submission start and attempt count per request**
 
 ```ts
 const submittedAtByRequestId = new Map<string, number>();
 const submissionAttemptsByRequestId = new Map<string, number>();
 ```
 
-- [ ] **Step 2: Record submission start when `transaction.submitted` arrives**
+- [x] **Step 2: Record submission start when `transaction.submitted` arrives**
 
 ```ts
 submittedAtByRequestId.set(requestId, Date.now());
 submissionAttemptsByRequestId.set(requestId, (submissionAttemptsByRequestId.get(requestId) ?? 0) + 1);
 ```
 
-- [ ] **Step 3: Trigger timeout handling before final confirmation**
+- [x] **Step 3: Trigger timeout handling before final confirmation**
 
 ```ts
 if (hasSubmissionTimedOut(submittedAt, Date.now(), lifecycleOptions.settlementTimeoutMs)) {
@@ -138,7 +138,7 @@ if (hasSubmissionTimedOut(submittedAt, Date.now(), lifecycleOptions.settlementTi
 }
 ```
 
-- [ ] **Step 4: Allow one transient retry before failure**
+- [x] **Step 4: Allow one transient retry before failure**
 
 ```ts
 if (canRetrySubmission(reason, attempt, lifecycleOptions.maxRetries)) {
@@ -146,7 +146,7 @@ if (canRetrySubmission(reason, attempt, lifecycleOptions.maxRetries)) {
 }
 ```
 
-- [ ] **Step 5: Clear lifecycle bookkeeping when a request resolves**
+- [x] **Step 5: Clear lifecycle bookkeeping when a request resolves**
 
 ```ts
 submittedAtByRequestId.delete(requestId);
@@ -159,7 +159,7 @@ submissionAttemptsByRequestId.delete(requestId);
 - Modify: `extension/src/sidepanel/components/ActionCard.tsx`
 - Modify: `extension/src/sidepanel/hooks/useSidePanelState.ts`
 
-- [ ] **Step 1: Surface submitted lifecycle text**
+- [x] **Step 1: Surface submitted lifecycle text**
 
 ```ts
 if (phase === "submitting" && walletStatus === "submitted") {
@@ -167,7 +167,7 @@ if (phase === "submitting" && walletStatus === "submitted") {
 }
 ```
 
-- [ ] **Step 2: Keep confirmed state distinct**
+- [x] **Step 2: Keep confirmed state distinct**
 
 ```ts
 if (phase === "confirmed") {
@@ -175,7 +175,7 @@ if (phase === "confirmed") {
 }
 ```
 
-- [ ] **Step 3: Pass any new lifecycle status through side panel state if needed**
+- [x] **Step 3: Pass any new lifecycle status through side panel state if needed**
 
 ```ts
 const [submissionStatus, setSubmissionStatus] = useState<"idle" | "submitted" | "confirmed">("idle");
@@ -186,22 +186,22 @@ const [submissionStatus, setSubmissionStatus] = useState<"idle" | "submitted" | 
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-19-transaction-submission-lifecycle.md`
 
-- [ ] **Step 1: Run type-check**
+- [x] **Step 1: Run type-check**
 
 Run: `pnpm -C extension exec tsc --noEmit --pretty false`
 Expected: PASS
 
-- [ ] **Step 2: Run full extension tests**
+- [x] **Step 2: Run full extension tests**
 
 Run: `pnpm -C extension test`
 Expected: PASS
 
-- [ ] **Step 3: Run production build**
+- [x] **Step 3: Run production build**
 
 Run: `pnpm -C extension build`
 Expected: PASS
 
-- [ ] **Step 4: Write execution status back into the plan**
+- [x] **Step 4: Write execution status back into the plan**
 
 Add an `Execution Status` section summarizing:
 

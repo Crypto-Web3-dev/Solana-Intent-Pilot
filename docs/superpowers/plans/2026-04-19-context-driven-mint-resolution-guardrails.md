@@ -30,7 +30,7 @@ Verification completed:
 **Files:**
 - Modify: `extension/tests/background/openai-intent-parser.test.ts`
 
-- [ ] **Step 1: Add the strong single-token happy-path test**
+- [x] **Step 1: Add the strong single-token happy-path test**
 
 ```ts
 it("keeps a resolved outputMint when explicit intent matches strong single-token context", () => {
@@ -52,7 +52,7 @@ it("keeps a resolved outputMint when explicit intent matches strong single-token
 });
 ```
 
-- [ ] **Step 2: Add the medium-strength context-dependent test**
+- [x] **Step 2: Add the medium-strength context-dependent test**
 
 ```ts
 it("keeps a candidate outputMint but caps confidence for context-dependent medium evidence", () => {
@@ -74,7 +74,7 @@ it("keeps a candidate outputMint but caps confidence for context-dependent mediu
 });
 ```
 
-- [ ] **Step 3: Add the multiple-candidate ambiguity test**
+- [x] **Step 3: Add the multiple-candidate ambiguity test**
 
 ```ts
 it("requires clarification when multiple token candidates could justify outputMint", () => {
@@ -96,7 +96,7 @@ it("requires clarification when multiple token candidates could justify outputMi
 });
 ```
 
-- [ ] **Step 4: Add the weak-hints-only test**
+- [x] **Step 4: Add the weak-hints-only test**
 
 ```ts
 it("requires clarification when outputMint is supported only by weak page hints", () => {
@@ -118,7 +118,7 @@ it("requires clarification when outputMint is supported only by weak page hints"
 });
 ```
 
-- [ ] **Step 5: Run focused parser tests to verify they fail**
+- [x] **Step 5: Run focused parser tests to verify they fail**
 
 Run: `pnpm -C extension test -- openai-intent-parser.test.ts`
 Expected: FAIL because mint guardrail behavior is not implemented yet
@@ -128,7 +128,7 @@ Expected: FAIL because mint guardrail behavior is not implemented yet
 **Files:**
 - Modify: `extension/src/background/openai-intent-parser.ts`
 
-- [ ] **Step 1: Add a mint-evidence strength helper**
+- [x] **Step 1: Add a mint-evidence strength helper**
 
 ```ts
 type MintEvidenceStrength = "weak" | "medium" | "strong";
@@ -153,7 +153,7 @@ function getMintEvidenceStrength(context?: DetectedContextSnapshot) {
 }
 ```
 
-- [ ] **Step 2: Add a helper for token-candidate ambiguity**
+- [x] **Step 2: Add a helper for token-candidate ambiguity**
 
 ```ts
 function hasMultipleTokenCandidates(context?: DetectedContextSnapshot) {
@@ -161,7 +161,7 @@ function hasMultipleTokenCandidates(context?: DetectedContextSnapshot) {
 }
 ```
 
-- [ ] **Step 3: Add a helper for weak mint provenance**
+- [x] **Step 3: Add a helper for weak mint provenance**
 
 ```ts
 function hasOnlyWeakMintProvenance(
@@ -185,7 +185,7 @@ function hasOnlyWeakMintProvenance(
 **Files:**
 - Modify: `extension/src/background/openai-intent-parser.ts`
 
-- [ ] **Step 1: Extend `normalizeIntentWithContext()` with mint guardrails**
+- [x] **Step 1: Extend `normalizeIntentWithContext()` with mint guardrails**
 
 ```ts
 const mintEvidenceStrength = getMintEvidenceStrength(context);
@@ -198,7 +198,7 @@ const mintNeedsClarification =
   weakMintProvenance;
 ```
 
-- [ ] **Step 2: Merge mint clarification with existing clarification rules**
+- [x] **Step 2: Merge mint clarification with existing clarification rules**
 
 ```ts
 const needsClarification =
@@ -207,7 +207,7 @@ const needsClarification =
   mintNeedsClarification;
 ```
 
-- [ ] **Step 3: Preserve candidate mints but cap confidence conservatively**
+- [x] **Step 3: Preserve candidate mints but cap confidence conservatively**
 
 ```ts
 if (needsClarification) {
@@ -220,7 +220,7 @@ if (needsClarification) {
 }
 ```
 
-- [ ] **Step 4: Run focused parser tests**
+- [x] **Step 4: Run focused parser tests**
 
 Run: `pnpm -C extension test -- openai-intent-parser.test.ts`
 Expected: PASS
@@ -230,7 +230,7 @@ Expected: PASS
 **Files:**
 - Modify: `extension/tests/background/workflow-engine.test.ts`
 
-- [ ] **Step 1: Add a regression test for mint-driven clarification**
+- [x] **Step 1: Add a regression test for mint-driven clarification**
 
 ```ts
 it("still short-circuits to clarification when mint guardrails reject weak page evidence", async () => {
@@ -238,7 +238,7 @@ it("still short-circuits to clarification when mint guardrails reject weak page 
 });
 ```
 
-- [ ] **Step 2: Run focused workflow tests**
+- [x] **Step 2: Run focused workflow tests**
 
 Run: `pnpm -C extension test -- workflow-engine.test.ts`
 Expected: PASS
@@ -248,22 +248,22 @@ Expected: PASS
 **Files:**
 - Modify: `docs/superpowers\\plans\\2026-04-19-context-driven-mint-resolution-guardrails.md`
 
-- [ ] **Step 1: Run type-check**
+- [x] **Step 1: Run type-check**
 
 Run: `pnpm -C extension exec tsc --noEmit --pretty false`
 Expected: PASS
 
-- [ ] **Step 2: Run full extension tests**
+- [x] **Step 2: Run full extension tests**
 
 Run: `pnpm -C extension test`
 Expected: PASS
 
-- [ ] **Step 3: Run production build**
+- [x] **Step 3: Run production build**
 
 Run: `pnpm -C extension build`
 Expected: PASS
 
-- [ ] **Step 4: Write execution status back into the plan**
+- [x] **Step 4: Write execution status back into the plan**
 
 Add an `Execution Status` section at the top of this plan summarizing:
 

@@ -63,7 +63,7 @@
 - Create: `extension/tsconfig.json`
 - Create: `extension/vite.config.ts`
 
-- [ ] **Step 1: Write the failing workspace smoke test**
+- [x] **Step 1: Write the failing workspace smoke test**
 
 Create `extension/tests/shared/contracts.test.ts` with:
 
@@ -77,12 +77,12 @@ describe("workspace smoke test", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --dir extension vitest run extension/tests/shared/contracts.test.ts`
 Expected: FAIL because `extension/package.json` and source files do not exist yet
 
-- [ ] **Step 3: Write minimal workspace scaffolding**
+- [x] **Step 3: Write minimal workspace scaffolding**
 
 Create `extension/package.json`:
 
@@ -144,7 +144,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: Add the minimal shared file needed for the smoke test**
+- [x] **Step 4: Add the minimal shared file needed for the smoke test**
 
 Create `extension/src/shared/workflow.ts`:
 
@@ -175,12 +175,12 @@ export type WorkflowReason =
   | "confirmed";
 ```
 
-- [ ] **Step 5: Run the smoke test to verify it passes**
+- [x] **Step 5: Run the smoke test to verify it passes**
 
 Run: `pnpm --dir extension vitest run tests/shared/contracts.test.ts`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add extension/package.json extension/tsconfig.json extension/vite.config.ts extension/src/shared/workflow.ts extension/tests/shared/contracts.test.ts
@@ -197,7 +197,7 @@ git commit -m "chore: scaffold extension workspace"
 - Create: `extension/src/shared/messages.ts`
 - Modify: `extension/tests/shared/contracts.test.ts`
 
-- [ ] **Step 1: Write the failing contract tests**
+- [x] **Step 1: Write the failing contract tests**
 
 Replace `extension/tests/shared/contracts.test.ts` with:
 
@@ -286,12 +286,12 @@ describe("shared runtime contracts", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pnpm --dir extension vitest run tests/shared/contracts.test.ts`
 Expected: FAIL because the shared contract files do not exist
 
-- [ ] **Step 3: Implement context and intent contracts**
+- [x] **Step 3: Implement context and intent contracts**
 
 Create `extension/src/shared/context.ts`:
 
@@ -340,7 +340,7 @@ export interface SIPIntent {
 }
 ```
 
-- [ ] **Step 4: Implement risk, execution, and message contracts**
+- [x] **Step 4: Implement risk, execution, and message contracts**
 
 Create `extension/src/shared/risk.ts`:
 
@@ -430,12 +430,12 @@ export interface IntentParseSucceededMessage {
 }
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `pnpm --dir extension vitest run tests/shared/contracts.test.ts`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add extension/src/shared extension/tests/shared/contracts.test.ts
@@ -448,7 +448,7 @@ git commit -m "feat: add shared runtime contracts"
 - Create: `extension/src/background/workflow-engine.ts`
 - Create: `extension/tests/background/workflow-engine.test.ts`
 
-- [ ] **Step 1: Write the failing workflow engine tests**
+- [x] **Step 1: Write the failing workflow engine tests**
 
 Create `extension/tests/background/workflow-engine.test.ts`:
 
@@ -550,12 +550,12 @@ describe("workflow engine", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pnpm --dir extension vitest run tests/background/workflow-engine.test.ts`
 Expected: FAIL because `createWorkflowEngine` does not exist
 
-- [ ] **Step 3: Implement the minimal workflow engine**
+- [x] **Step 3: Implement the minimal workflow engine**
 
 Create `extension/src/background/workflow-engine.ts`:
 
@@ -617,17 +617,17 @@ export function createWorkflowEngine() {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --dir extension vitest run tests/background/workflow-engine.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Run all tests**
+- [x] **Step 5: Run all tests**
 
 Run: `pnpm --dir extension vitest run`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add extension/src/background/workflow-engine.ts extension/tests/background/workflow-engine.test.ts
@@ -642,7 +642,7 @@ git commit -m "feat: add workflow engine skeleton"
 - Modify: `extension/src/shared/messages.ts`
 - Test: `extension/tests/background/workflow-engine.test.ts`
 
-- [ ] **Step 1: Write the failing router test**
+- [x] **Step 1: Write the failing router test**
 
 Append to `extension/tests/background/workflow-engine.test.ts`:
 
@@ -673,12 +673,12 @@ it("routes an intent request through parse, risk, and preview", async () => {
 });
 ```
 
-- [ ] **Step 2: Run the router test to verify it fails**
+- [x] **Step 2: Run the router test to verify it fails**
 
 Run: `pnpm --dir extension vitest run tests/background/workflow-engine.test.ts`
 Expected: FAIL because router and mock services do not exist
 
-- [ ] **Step 3: Add the missing message type and mock services**
+- [x] **Step 3: Add the missing message type and mock services**
 
 Append to `extension/src/shared/messages.ts`:
 
@@ -786,7 +786,7 @@ export async function mockExecutionPreview(
 }
 ```
 
-- [ ] **Step 4: Implement the message router**
+- [x] **Step 4: Implement the message router**
 
 Create `extension/src/background/message-router.ts`:
 
@@ -869,12 +869,12 @@ export function createMessageRouter() {
 }
 ```
 
-- [ ] **Step 5: Run the router test to verify it passes**
+- [x] **Step 5: Run the router test to verify it passes**
 
 Run: `pnpm --dir extension vitest run tests/background/workflow-engine.test.ts`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add extension/src/background/mock-services.ts extension/src/background/message-router.ts extension/src/shared/messages.ts extension/tests/background/workflow-engine.test.ts
@@ -891,7 +891,7 @@ git commit -m "feat: add mock workflow router"
 - Create: `extension/src/sidepanel/components/RiskIndicator.tsx`
 - Create: `extension/src/sidepanel/components/ActionCard.tsx`
 
-- [ ] **Step 1: Write the failing UI smoke test**
+- [x] **Step 1: Write the failing UI smoke test**
 
 Create `extension/tests/sidepanel/sidepanel.test.tsx`:
 
@@ -909,12 +909,12 @@ describe("SidePanelPage", () => {
 });
 ```
 
-- [ ] **Step 2: Run the UI test to verify it fails**
+- [x] **Step 2: Run the UI test to verify it fails**
 
 Run: `pnpm --dir extension vitest run tests/sidepanel/sidepanel.test.tsx`
 Expected: FAIL because the page and components do not exist
 
-- [ ] **Step 3: Implement the minimal state hook**
+- [x] **Step 3: Implement the minimal state hook**
 
 Create `extension/src/sidepanel/hooks/useSidePanelState.ts`:
 
@@ -972,7 +972,7 @@ export function useSidePanelState() {
 }
 ```
 
-- [ ] **Step 4: Implement the minimal UI components**
+- [x] **Step 4: Implement the minimal UI components**
 
 Create `extension/src/sidepanel/components/DetectionBar.tsx`:
 
@@ -1051,12 +1051,12 @@ export function SidePanelPage() {
 }
 ```
 
-- [ ] **Step 5: Run the UI test to verify it passes**
+- [x] **Step 5: Run the UI test to verify it passes**
 
 Run: `pnpm --dir extension vitest run tests/sidepanel/sidepanel.test.tsx`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add extension/src/sidepanel extension/tests/sidepanel/sidepanel.test.tsx
@@ -1068,7 +1068,7 @@ git commit -m "feat: add sidepanel mock ui shell"
 **Files:**
 - Create: `extension/src/content/detect-context.ts`
 
-- [ ] **Step 1: Write the failing content contract test**
+- [x] **Step 1: Write the failing content contract test**
 
 Create `extension/tests/content/detect-context.test.ts`:
 
@@ -1085,12 +1085,12 @@ describe("detect context", () => {
 });
 ```
 
-- [ ] **Step 2: Run the content test to verify it fails**
+- [x] **Step 2: Run the content test to verify it fails**
 
 Run: `pnpm --dir extension vitest run tests/content/detect-context.test.ts`
 Expected: FAIL because the module does not exist
 
-- [ ] **Step 3: Implement the minimal content helper**
+- [x] **Step 3: Implement the minimal content helper**
 
 Create `extension/src/content/detect-context.ts`:
 
@@ -1110,17 +1110,17 @@ export function buildMockDetectedContext(): DetectedContextSnapshot {
 }
 ```
 
-- [ ] **Step 4: Run the content test to verify it passes**
+- [x] **Step 4: Run the content test to verify it passes**
 
 Run: `pnpm --dir extension vitest run tests/content/detect-context.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Run the full test suite**
+- [x] **Step 5: Run the full test suite**
 
 Run: `pnpm --dir extension vitest run`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add extension/src/content/detect-context.ts extension/tests/content/detect-context.test.ts
@@ -1132,17 +1132,17 @@ git commit -m "feat: add content context skeleton"
 **Files:**
 - Modify: `extension/package.json` if build scripts need adjustment
 
-- [ ] **Step 1: Run the test suite as a final contract check**
+- [x] **Step 1: Run the test suite as a final contract check**
 
 Run: `pnpm --dir extension vitest run`
 Expected: PASS
 
-- [ ] **Step 2: Run the extension build**
+- [x] **Step 2: Run the extension build**
 
 Run: `pnpm --dir extension build`
 Expected: build output generated by Plasmo, or a precise missing-entry error that tells us which extension entry file still needs to be added
 
-- [ ] **Step 3: If build fails only because an entry file is missing, add the minimal entry wrapper**
+- [x] **Step 3: If build fails only because an entry file is missing, add the minimal entry wrapper**
 
 Create `extension/src/sidepanel/index.tsx` if needed:
 
@@ -1156,12 +1156,12 @@ document.body.appendChild(container);
 createRoot(container).render(<SidePanelPage />);
 ```
 
-- [ ] **Step 4: Re-run the build**
+- [x] **Step 4: Re-run the build**
 
 Run: `pnpm --dir extension build`
 Expected: successful build or a narrower integration issue to address in the next plan
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add extension

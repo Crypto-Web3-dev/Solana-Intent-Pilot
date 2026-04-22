@@ -32,7 +32,7 @@ Verification completed:
 - Modify: `extension/tests/background/openai-intent-parser.test.ts`
 - Modify: `extension/src/background/openai-intent-parser.ts`
 
-- [ ] **Step 1: Add the specific-request happy-path test**
+- [x] **Step 1: Add the specific-request happy-path test**
 
 ```ts
 it("keeps high confidence for a specific request with strong context", () => {
@@ -55,7 +55,7 @@ it("keeps high confidence for a specific request with strong context", () => {
 });
 ```
 
-- [ ] **Step 2: Add the context-dependent ambiguity test**
+- [x] **Step 2: Add the context-dependent ambiguity test**
 
 ```ts
 it("caps confidence for context-dependent requests with only medium certainty", () => {
@@ -76,7 +76,7 @@ it("caps confidence for context-dependent requests with only medium certainty", 
 });
 ```
 
-- [ ] **Step 3: Add the multiple-token clarification test**
+- [x] **Step 3: Add the multiple-token clarification test**
 
 ```ts
 it("requires clarification when multiple token candidates exist", () => {
@@ -98,7 +98,7 @@ it("requires clarification when multiple token candidates exist", () => {
 });
 ```
 
-- [ ] **Step 4: Add the underspecified-request test**
+- [x] **Step 4: Add the underspecified-request test**
 
 ```ts
 it("requires clarification for extremely underspecified requests", () => {
@@ -120,7 +120,7 @@ it("requires clarification for extremely underspecified requests", () => {
 });
 ```
 
-- [ ] **Step 5: Run the focused parser tests to verify they fail**
+- [x] **Step 5: Run the focused parser tests to verify they fail**
 
 Run: `pnpm -C extension test -- openai-intent-parser.test.ts`
 Expected: FAIL because normalization helpers do not exist yet
@@ -130,7 +130,7 @@ Expected: FAIL because normalization helpers do not exist yet
 **Files:**
 - Modify: `extension/src/background/openai-intent-parser.ts`
 
-- [ ] **Step 1: Add context-strength helpers**
+- [x] **Step 1: Add context-strength helpers**
 
 ```ts
 type ContextStrength = "weak" | "medium" | "strong";
@@ -156,7 +156,7 @@ function getContextStrength(context?: DetectedContextSnapshot): ContextStrength 
 }
 ```
 
-- [ ] **Step 2: Add request-ambiguity helpers**
+- [x] **Step 2: Add request-ambiguity helpers**
 
 ```ts
 function isUnderspecifiedRequest(userInput: string) {
@@ -170,7 +170,7 @@ function isContextDependentRequest(userInput: string) {
 }
 ```
 
-- [ ] **Step 3: Add deterministic source-context extraction**
+- [x] **Step 3: Add deterministic source-context extraction**
 
 ```ts
 function buildSourceContext(context?: DetectedContextSnapshot) {
@@ -195,7 +195,7 @@ function buildSourceContext(context?: DetectedContextSnapshot) {
 **Files:**
 - Modify: `extension/src/background/openai-intent-parser.ts`
 
-- [ ] **Step 1: Add `normalizeIntentWithContext()`**
+- [x] **Step 1: Add `normalizeIntentWithContext()`**
 
 ```ts
 export function normalizeIntentWithContext(
@@ -230,7 +230,7 @@ export function normalizeIntentWithContext(
 }
 ```
 
-- [ ] **Step 2: Apply normalization after parsing**
+- [x] **Step 2: Apply normalization after parsing**
 
 ```ts
 const parsed = JSON.parse(content) as OpenAIResponseIntent;
@@ -244,7 +244,7 @@ const intent: SIPIntent = {
 return normalizeIntentWithContext(intent, context, userInput);
 ```
 
-- [ ] **Step 3: Run focused parser tests**
+- [x] **Step 3: Run focused parser tests**
 
 Run: `pnpm -C extension test -- openai-intent-parser.test.ts`
 Expected: PASS
@@ -254,7 +254,7 @@ Expected: PASS
 **Files:**
 - Modify: `extension/tests/background/workflow-engine.test.ts`
 
-- [ ] **Step 1: Add a regression assertion for clarification semantics**
+- [x] **Step 1: Add a regression assertion for clarification semantics**
 
 ```ts
 it("still returns to idle when context-aware parsing sets clarification", async () => {
@@ -262,7 +262,7 @@ it("still returns to idle when context-aware parsing sets clarification", async 
 });
 ```
 
-- [ ] **Step 2: Run focused workflow tests**
+- [x] **Step 2: Run focused workflow tests**
 
 Run: `pnpm -C extension test -- workflow-engine.test.ts`
 Expected: PASS
@@ -273,21 +273,21 @@ Expected: PASS
 - Modify: `docs/superpowers/specs/2026-04-19-context-aware-clarification-confidence-design.md`
 - Modify: `docs/superpowers/plans/2026-04-19-context-aware-clarification-confidence.md`
 
-- [ ] **Step 1: Run type-check**
+- [x] **Step 1: Run type-check**
 
 Run: `pnpm -C extension exec tsc --noEmit --pretty false`
 Expected: PASS
 
-- [ ] **Step 2: Run the full extension test suite**
+- [x] **Step 2: Run the full extension test suite**
 
 Run: `pnpm -C extension test`
 Expected: PASS
 
-- [ ] **Step 3: Run the extension build**
+- [x] **Step 3: Run the extension build**
 
 Run: `pnpm -C extension build`
 Expected: PASS
 
-- [ ] **Step 4: Update docs if implementation differs from the plan**
+- [x] **Step 4: Update docs if implementation differs from the plan**
 
 Adjust the spec or plan inline if names, caps, or source-context labels changed during implementation.

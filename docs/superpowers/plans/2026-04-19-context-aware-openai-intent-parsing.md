@@ -43,7 +43,7 @@ Notes:
 - Create: `extension/tests/background/openai-intent-parser.test.ts`
 - Modify: `extension/src/background/openai-intent-parser.ts`
 
-- [ ] **Step 1: Write the failing test for structured context injection**
+- [x] **Step 1: Write the failing test for structured context injection**
 
 ```ts
 it("includes structured page context in the OpenAI request", async () => {
@@ -64,12 +64,12 @@ it("includes structured page context in the OpenAI request", async () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run: `pnpm -C extension test -- openai-intent-parser.test.ts`
 Expected: FAIL because the parser does not accept injected client/context yet
 
-- [ ] **Step 3: Add the no-context compatibility test**
+- [x] **Step 3: Add the no-context compatibility test**
 
 ```ts
 it("still works when no context snapshot is provided", async () => {
@@ -88,7 +88,7 @@ it("still works when no context snapshot is provided", async () => {
 });
 ```
 
-- [ ] **Step 4: Add the deterministic formatter test**
+- [x] **Step 4: Add the deterministic formatter test**
 
 ```ts
 it("formats context into a stable summary block", () => {
@@ -100,7 +100,7 @@ it("formats context into a stable summary block", () => {
 });
 ```
 
-- [ ] **Step 5: Run the focused tests again**
+- [x] **Step 5: Run the focused tests again**
 
 Run: `pnpm -C extension test -- openai-intent-parser.test.ts`
 Expected: FAIL only because implementation is missing
@@ -110,7 +110,7 @@ Expected: FAIL only because implementation is missing
 **Files:**
 - Modify: `extension/src/background/openai-intent-parser.ts`
 
-- [ ] **Step 1: Add the optional parser dependencies**
+- [x] **Step 1: Add the optional parser dependencies**
 
 ```ts
 export function createOpenAIIntentParser(options?: {
@@ -126,7 +126,7 @@ export function createOpenAIIntentParser(options?: {
   const client = options?.client ?? (apiKey ? createClient(apiKey) : null);
 ```
 
-- [ ] **Step 2: Add the context formatter**
+- [x] **Step 2: Add the context formatter**
 
 ```ts
 export function formatContextForPrompt(context?: DetectedContextSnapshot) {
@@ -155,7 +155,7 @@ export function formatContextForPrompt(context?: DetectedContextSnapshot) {
 }
 ```
 
-- [ ] **Step 3: Update the parser method signature**
+- [x] **Step 3: Update the parser method signature**
 
 ```ts
 async parseIntent(
@@ -164,7 +164,7 @@ async parseIntent(
 ): Promise<SIPIntent> {
 ```
 
-- [ ] **Step 4: Add the structured context input block**
+- [x] **Step 4: Add the structured context input block**
 
 ```ts
 input: [
@@ -184,7 +184,7 @@ input: [
 ],
 ```
 
-- [ ] **Step 5: Run the focused parser tests**
+- [x] **Step 5: Run the focused parser tests**
 
 Run: `pnpm -C extension test -- openai-intent-parser.test.ts`
 Expected: PASS
@@ -196,7 +196,7 @@ Expected: PASS
 - Modify: `extension/src/background/runtime-services.ts`
 - Modify: `extension/src/background/message-router.ts`
 
-- [ ] **Step 1: Update the shared parser interface**
+- [x] **Step 1: Update the shared parser interface**
 
 ```ts
 export interface IntentParser {
@@ -207,7 +207,7 @@ export interface IntentParser {
 }
 ```
 
-- [ ] **Step 2: Keep the mock parser compatible**
+- [x] **Step 2: Keep the mock parser compatible**
 
 ```ts
 export function createMockIntentParser(): IntentParser {
@@ -219,7 +219,7 @@ export function createMockIntentParser(): IntentParser {
 }
 ```
 
-- [ ] **Step 3: Pass context through the default parser**
+- [x] **Step 3: Pass context through the default parser**
 
 ```ts
 async parseIntent(userInput: string, context?: DetectedContextSnapshot) {
@@ -231,14 +231,14 @@ async parseIntent(userInput: string, context?: DetectedContextSnapshot) {
 }
 ```
 
-- [ ] **Step 4: Update runtime services and router calls**
+- [x] **Step 4: Update runtime services and router calls**
 
 ```ts
 const { requestId, userInput, contextSnapshot } = message.payload;
 intent = await services.parseIntent(userInput, contextSnapshot);
 ```
 
-- [ ] **Step 5: Run focused workflow tests**
+- [x] **Step 5: Run focused workflow tests**
 
 Run: `pnpm -C extension test -- workflow-engine.test.ts`
 Expected: PASS
@@ -249,21 +249,21 @@ Expected: PASS
 - Modify: `docs/superpowers/specs/2026-04-19-context-aware-openai-intent-parsing-design.md`
 - Modify: `docs/superpowers/plans/2026-04-19-context-aware-openai-intent-parsing.md`
 
-- [ ] **Step 1: Run type-check**
+- [x] **Step 1: Run type-check**
 
 Run: `pnpm -C extension exec tsc --noEmit --pretty false`
 Expected: PASS
 
-- [ ] **Step 2: Run the full extension test suite**
+- [x] **Step 2: Run the full extension test suite**
 
 Run: `pnpm -C extension test`
 Expected: PASS
 
-- [ ] **Step 3: Run the extension build**
+- [x] **Step 3: Run the extension build**
 
 Run: `pnpm -C extension build`
 Expected: PASS
 
-- [ ] **Step 4: Update docs if implementation differs from the plan**
+- [x] **Step 4: Update docs if implementation differs from the plan**
 
 Adjust the spec or plan inline if naming or prompt wording changed during implementation.
