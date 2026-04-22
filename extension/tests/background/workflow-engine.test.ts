@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { createMessageRouter } from "../../src/background/message-router";
 import { createMockIntentParser } from "../../src/background/intent-parser";
 import { normalizeIntentWithContext } from "../../src/background/openai-intent-parser";
-import { createMockPreviewAdapter } from "../../src/background/preview-adapter";
-import { createPolicyPreviewAdapter } from "../../src/background/preview-adapter";
+import {
+  createMockPreviewAdapter,
+  createPolicyPreviewAdapter
+} from "../../src/background/preview-adapter";
+import { createMockQuoteAdapter } from "../../src/background/quote-adapter";
 import {
   createMockRiskAdapter,
   createPolicyRiskAdapter
@@ -509,6 +512,7 @@ describe("workflow engine", () => {
 
   it("uses the policy preview adapter to combine quote and simulation results", async () => {
     const adapter = createPolicyPreviewAdapter({
+      quoteAdapter: createMockQuoteAdapter(),
       simulationAdapter: createMockSimulationAdapter()
     });
     const preview = await adapter.buildPreview("req-policy-preview", validIntent);
