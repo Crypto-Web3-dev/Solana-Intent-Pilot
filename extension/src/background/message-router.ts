@@ -60,7 +60,7 @@ export function createMessageRouter(
     async handleIntentRequest(
       message: IntentParseRequestedMessage
     ): Promise<SIPRuntimeMessage[]> {
-      const { requestId, userInput, contextSnapshot } = message.payload;
+      const { requestId, userInput, contextSnapshot, userPublicKey } = message.payload;
       const events: SIPRuntimeMessage[] = [];
       let intent: SIPIntent;
 
@@ -69,6 +69,10 @@ export function createMessageRouter(
 
       try {
         intent = await services.parseIntent(userInput, contextSnapshot);
+        // 如果消息中携带了公钥，则将其存入意图载荷中
+        if (userPublicKey) {
+          intent.payload.userPublicKey = userPublicKey;
+        }
       } catch (error) {
         const reason = error instanceof Error ? error.message : "Intent parse failed";
 

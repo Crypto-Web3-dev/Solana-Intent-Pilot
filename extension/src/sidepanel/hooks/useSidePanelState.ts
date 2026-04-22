@@ -18,7 +18,38 @@ import {
 import { getCurrentPageContext } from "../page-context";
 import type { WalletStatus } from "../wallet-state";
 
-const router = createMessageRouter();
+function createChromeRuntimeMessageRouter(): SidePanelMessageRouter {
+  const send = async (message: SIPRuntimeMessage) => {
+    return new Promise<SIPRuntimeMessage[]>((resolve, reject) => {
+      try {
+        chrome.runtime.sendMessage(message, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(response || []);
+          }
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  };
+
+  return {
+    handleIntentRequest: send,
+    handleExecutionConfirmed: send,
+    handleExecutionCancelled: send,
+    handleTransactionSubmitted: send,
+    handleTransactionFailed: send,
+    handleTransactionSettled: send
+  } as SidePanelMessageRouter;
+}
+
+const isTest =
+  typeof process !== "undefined" && process.env.NODE_ENV === "test";
+const router = isTest
+  ? createMessageRouter()
+  : createChromeRuntimeMessageRouter();
 
 export function createRequestTracker() {
   let latestToken = 0;
@@ -47,6 +78,7 @@ export function useSidePanelState(
   const requestSequence = useRef(1);
   const requestTracker = useRef(createRequestTracker());
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [pageTabId, setPageTabId] = useState<number | null>(null);
   const [phase, setPhase] = useState<WorkflowPhase>("idle");
   const [reason, setReason] = useState<WorkflowReason | string | null>(null);
   const [intent, setIntent] = useState<SIPIntent | null>(null);
@@ -70,6 +102,7 @@ export function useSidePanelState(
     setWalletStatus("unknown");
     setIsSigning(false);
     setClarification(null);
+    setPageTabId(null);
   }
 
   function applyEvents(events: SIPRuntimeMessage[]) {
@@ -119,13 +152,17 @@ export function useSidePanelState(
       return;
     }
 
+    // 在解析意图前尝试获取钱包地址
+    const wallet = await detectWalletStatus(pageContext.tabId);
+
     const events = await messageRouter.handleIntentRequest({
       type: "intent.parse.requested",
       payload: {
         requestId: nextRequestId,
         tabId: pageContext.tabId,
         userInput,
-        contextSnapshot: pageContext
+        contextSnapshot: pageContext,
+        userPublicKey: wallet.address
       }
     });
 
@@ -133,6 +170,8 @@ export function useSidePanelState(
       return;
     }
 
+    setPageTabId(pageContext.tabId);
+    setWalletStatus(wallet.status);
     applyEvents(events);
   }
 
@@ -149,14 +188,14 @@ export function useSidePanelState(
     setWalletStatus("checking");
 
     void detectWalletStatus()
-      .then((status) => {
+      .then((res) => {
         if (!cancelled) {
-          setWalletStatus(status);
+          setWalletStatus(res.status);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setWalletStatus("failed");
+          setWalletStatus("unknown");
         }
       });
 
@@ -189,23 +228,27 @@ export function useSidePanelState(
           const submission = await submitWithLifecycle(
             requestId,
             intent,
-            preview
+            preview,
+            pageTabId ?? undefined
           );
           if (submission.outcome === "settled" && submission.signature) {
             setWalletStatus("submitted");
 
-            applyEvents(
-              messageRouter.handleTransactionSubmitted({
+            // 提交到 Jupiter executeSwap 接口
+            try {
+              await messageRouter.handleTransactionSubmitted({
                 type: "transaction.submitted",
                 payload: {
                   requestId,
                   signature: submission.signature
                 }
-              })
-            );
+              });
+            } catch (err) {
+              console.error("Failed to execute swap on Jupiter:", err);
+            }
 
             applyEvents(
-              messageRouter.handleTransactionSettled({
+              await messageRouter.handleTransactionSettled({
                 type: "transaction.settled",
                 payload: {
                   requestId,
@@ -215,36 +258,54 @@ export function useSidePanelState(
                 }
               })
             );
-
+            setIsSigning(false);
             return;
           }
 
-          setPhase("failed");
-          setReason("submit-failed");
-          setErrorMessage(
+          const failureReason = submission.error || (
             submission.outcome === "timeout"
               ? "Transaction submission timed out before confirmation."
               : "Wallet submission failed"
           );
+
+          applyEvents(
+            await messageRouter.handleTransactionFailed({
+              type: "transaction.failed",
+              payload: {
+                requestId,
+                reason: failureReason
+              }
+            })
+          );
+          setErrorMessage(failureReason);
           setWalletStatus("failed");
           setIsSigning(false);
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "Wallet submission failed";
 
-          setPhase(
-            message.includes("normal web pages") ? "blocked" : "failed"
-          );
-          setReason(
-            message.includes("normal web pages")
-              ? "unsupported-page"
-              : "submit-failed"
-          );
+          const isBlocked = message.includes("normal web pages");
+
+          if (isBlocked) {
+            setPhase("blocked");
+            setReason("unsupported-page");
+          } else {
+            applyEvents(
+              await messageRouter.handleTransactionFailed({
+                type: "transaction.failed",
+                payload: {
+                  requestId,
+                  reason: message
+                }
+              })
+            );
+          }
+
           setErrorMessage(message);
           setWalletStatus(
             message.includes("Wallet provider not available")
               ? "provider-missing"
-              : message.includes("normal web pages")
+              : isBlocked
                 ? "unsupported-page"
                 : "failed"
           );
@@ -258,13 +319,15 @@ export function useSidePanelState(
       return;
     }
 
-    applyEvents(
-      messageRouter.handleExecutionCancelled({
+    void messageRouter
+      .handleExecutionCancelled({
         type: "execution.cancelled",
         payload: { requestId }
       } satisfies ExecutionCancelledMessage)
-    );
-    setIsSigning(false);
+      .then((events) => {
+        applyEvents(events);
+        setIsSigning(false);
+      });
   }
 
   function failSubmission() {
@@ -272,17 +335,19 @@ export function useSidePanelState(
       return;
     }
 
-    applyEvents(
-      messageRouter.handleTransactionFailed({
+    void messageRouter
+      .handleTransactionFailed({
         type: "transaction.failed",
         payload: {
           requestId,
           reason: "Mock submission failed"
         }
       } satisfies TransactionFailedMessage)
-    );
-    setWalletStatus("failed");
-    setIsSigning(false);
+      .then((events) => {
+        applyEvents(events);
+        setWalletStatus("failed");
+        setIsSigning(false);
+      });
   }
 
   function settleTransaction() {
@@ -290,8 +355,8 @@ export function useSidePanelState(
       return;
     }
 
-    applyEvents(
-      messageRouter.handleTransactionSettled({
+    void messageRouter
+      .handleTransactionSettled({
         type: "transaction.settled",
         payload: {
           requestId,
@@ -299,8 +364,10 @@ export function useSidePanelState(
           settledAt: new Date().toISOString()
         }
       } satisfies TransactionSettledMessage)
-    );
-    setIsSigning(false);
+      .then((events) => {
+        applyEvents(events);
+        setIsSigning(false);
+      });
   }
 
   function openNormalPage() {
@@ -313,6 +380,7 @@ export function useSidePanelState(
 
   return {
     requestId,
+    pageTabId,
     phase,
     reason,
     intent,

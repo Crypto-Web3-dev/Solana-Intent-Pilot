@@ -7,7 +7,7 @@ describe("SidePanelPage", () => {
   it("renders a mock workflow summary", () => {
     const html = renderToString(<SidePanelPage />);
     expect(html).toContain("SIP Side Panel");
-    expect(html).toContain("Submit Mock Intent");
+    expect(html).toContain("Submit Intent");
     expect(html).toContain("Workflow State");
     expect(html).toContain("Intent + Risk");
     expect(html).toContain("Execution");

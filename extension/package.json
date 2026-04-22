@@ -11,15 +11,23 @@
   },
   "dependencies": {
     "@plasmohq/storage": "^1.10.0",
+    "@solana/web3.js": "^1.98.4",
     "openai": "^6.34.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "manifest": {
     "permissions": [
+      "tabs",
       "scripting",
       "activeTab"
-    ]
+    ],
+    "host_permissions": [
+      "<all_urls>"
+    ],
+    "content_security_policy": {
+      "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+    }
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

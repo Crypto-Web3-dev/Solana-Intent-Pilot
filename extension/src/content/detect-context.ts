@@ -55,10 +55,13 @@ type ChromeRuntimeLike = {
   onMessage?: {
     addListener(
       listener: (
-        message: WalletSubmissionRequestedMessage,
+        message:
+          | WalletSubmissionRequestedMessage
+          | { type: "context.snapshot.requested" },
         sender: unknown,
         sendResponse: (
           response:
+            | ContextDetectedMessage
             | WalletSubmissionCompletedMessage
             | WalletSubmissionFailedMessage
             | undefined
@@ -85,68 +88,33 @@ type WindowWithSolana = Window & {
 async function handleWalletSubmission(
   message: WalletSubmissionRequestedMessage
 ): Promise<WalletSubmissionCompletedMessage | WalletSubmissionFailedMessage> {
-  const windowWithSolana = globalThis.window as WindowWithSolana | undefined;
-  const solana = windowWithSolana?.solana;
-
-  if (!solana) {
-    return {
-      type: "wallet.submission.failed",
-      payload: {
-        requestId: message.payload.requestId,
-        reason: "Wallet provider not available in page context"
-      }
-    };
-  }
-
-  try {
-    if (typeof solana.connect === "function") {
-      await solana.connect();
-    }
-
-    if (typeof solana.signAndSendTransaction === "function") {
-      const signed = await solana.signAndSendTransaction({});
-
-      return {
-        type: "wallet.submission.completed",
-        payload: {
-          requestId: message.payload.requestId,
-          signature: signed.signature,
-          explorerUrl: `https://explorer.solana.com/tx/${signed.signature}`
+  return new Promise((resolve) => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === "SIP_SIGN_RES") {
+        window.removeEventListener("message", handler);
+        if (event.data.error) {
+          resolve({
+            type: "wallet.submission.failed",
+            payload: { requestId: message.payload.requestId, reason: event.data.error }
+          });
+        } else {
+          resolve({
+            type: "wallet.submission.completed",
+            payload: {
+              requestId: message.payload.requestId,
+              signature: event.data.result.signature,
+              explorerUrl: `https://explorer.solana.com/tx/${event.data.result.signature}`
+            }
+          });
         }
-      };
-    }
-
-    if (typeof solana.signTransaction === "function") {
-      await solana.signTransaction({});
-
-      return {
-        type: "wallet.submission.completed",
-        payload: {
-          requestId: message.payload.requestId,
-          signature: `signed-${message.payload.requestId}`,
-          explorerUrl: `https://explorer.solana.com/tx/signed-${message.payload.requestId}`
-        }
-      };
-    }
-
-    return {
-      type: "wallet.submission.failed",
-      payload: {
-        requestId: message.payload.requestId,
-        reason: "No compatible wallet signing method found"
       }
     };
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : "Wallet submission failed";
-
-    return {
-      type: "wallet.submission.failed",
-      payload: {
-        requestId: message.payload.requestId,
-        reason
-      }
-    };
-  }
+    window.addEventListener("message", handler);
+    window.postMessage({
+      type: "SIP_SIGN_REQ",
+      transaction: message.payload.preview.swapTransaction
+    }, "*");
+  });
 }
 
 export function registerWalletBridge() {
@@ -155,11 +123,11 @@ export function registerWalletBridge() {
   }).chrome;
 
   chromeApi?.runtime?.onMessage?.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== "wallet.submission.requested") {
-      return;
+    if (message?.type === "context.snapshot.requested") {
+      sendResponse(createContextDetectedMessage());
+      return true;
     }
 
-    void handleWalletSubmission(message).then((response) => sendResponse(response));
-    return true;
+    return false;
   });
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createDefaultSimulationAdapter,
-  createRpcPreflightSimulationAdapter,
+  createRpcSimulationAdapter,
   type SimulationAdapter
 } from "../../src/background/simulation-adapter";
 import type { SIPIntent } from "../../src/shared/intent";
@@ -25,84 +25,68 @@ const validIntent: SIPIntent = {
   }
 };
 
+const mockTx = "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
 describe("default simulation adapter", () => {
-  it("uses an RPC preflight response when the provider is healthy", async () => {
+  it("uses a real RPC simulation response when available", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         result: {
-          context: {
-            slot: 123456
-          },
           value: {
-            blockhash: "abc",
-            lastValidBlockHeight: 99
+            err: null,
+            unitsConsumed: 1250,
+            logs: ["Program log: Instruction: Swap"]
           }
         }
       })
     });
 
     const adapter = createDefaultSimulationAdapter({ fetchImpl });
-    const result = await adapter.simulate(validIntent);
+    const result = await adapter.simulate(validIntent, mockTx);
 
-    expect(result.simulationSummary).toContain("RPC preflight ready");
-    expect(result.simulationSummary).toContain("slot 123456");
+    expect(result.success).toBe(true);
+    expect(result.simulationSummary).toContain("Success");
+    expect(result.simulationSummary).toContain("1250 CU");
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to the mock adapter when the RPC preflight fails", async () => {
-    const fetchImpl = vi.fn().mockRejectedValue(new Error("rpc down"));
-    const adapter = createDefaultSimulationAdapter({ fetchImpl });
-
-    const result = await adapter.simulate(validIntent);
-
-    expect(result.simulationSummary).toBe("Mock simulation passed");
-  });
-
-  it("falls back to a custom adapter when the provider data is malformed", async () => {
+  it("handles RPC simulation errors correctly", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         result: {
           value: {
-            blockhash: "abc"
+            err: { InstructionError: [0, "InsufficientFunds"] }
           }
         }
       })
     });
-    const fallbackAdapter: SimulationAdapter = {
-      simulate: vi.fn().mockResolvedValue({
-        simulationSummary: "Fallback simulation"
-      })
-    };
 
-    const adapter = createDefaultSimulationAdapter({
-      fetchImpl,
-      fallbackAdapter
-    });
-    const result = await adapter.simulate(validIntent);
+    const adapter = createDefaultSimulationAdapter({ fetchImpl });
+    const result = await adapter.simulate(validIntent, mockTx);
 
-    expect(result.simulationSummary).toBe("Fallback simulation");
-    expect(fallbackAdapter.simulate).toHaveBeenCalledWith(validIntent);
+    expect(result.success).toBe(false);
+    expect(result.simulationSummary).toContain("Simulation failed");
+    expect(result.error).toContain("InsufficientFunds");
   });
 
-  it("fails live simulation mapping when required fields are missing", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        result: {
-          context: {
-            slot: 123456
-          },
-          value: {}
-        }
-      })
-    });
+  it("falls back to mock when RPC request fails", async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error("network error"));
+    const adapter = createDefaultSimulationAdapter({ fetchImpl });
 
-    const adapter = createRpcPreflightSimulationAdapter({ fetchImpl });
+    const result = await adapter.simulate(validIntent, mockTx);
 
-    await expect(adapter.simulate(validIntent)).rejects.toThrow(
-      "RPC preflight response is missing required fields"
-    );
+    // Mock adapter returns "Mock simulation passed"
+    expect(result.simulationSummary).toBe("Mock simulation passed");
+    expect(result.success).toBe(true);
+  });
+
+  it("returns failure summary when no transaction is provided", async () => {
+    const adapter = createRpcSimulationAdapter();
+    const result = await adapter.simulate(validIntent, null);
+
+    expect(result.success).toBe(false);
+    expect(result.simulationSummary).toBe("No transaction payload to simulate.");
   });
 });

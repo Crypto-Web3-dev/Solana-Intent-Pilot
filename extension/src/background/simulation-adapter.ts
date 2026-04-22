@@ -2,40 +2,26 @@ import type { SIPIntent } from "../shared/intent";
 
 export interface SimulationResult {
   simulationSummary: string;
+  success: boolean;
+  error?: string;
 }
 
 export interface SimulationAdapter {
-  simulate(intent: SIPIntent): Promise<SimulationResult>;
+  simulate(intent: SIPIntent, transaction?: string | null): Promise<SimulationResult>;
 }
 
-type RpcPreflightResponse = {
+type RpcSimulationResponse = {
   result?: {
-    context?: {
-      slot?: number;
-    };
     value?: {
-      blockhash?: string;
+      err?: any;
+      logs?: string[];
+      unitsConsumed?: number;
     };
+  };
+  error?: {
+    message: string;
   };
 };
-
-function isUsablePreflightResponse(
-  response: RpcPreflightResponse
-): response is {
-  result: {
-    context: {
-      slot: number;
-    };
-    value: {
-      blockhash: string;
-    };
-  };
-} {
-  return Boolean(
-    response.result?.context?.slot !== undefined &&
-      response.result?.value?.blockhash
-  );
-}
 
 export function createMockSimulationAdapter(): SimulationAdapter {
   return {
@@ -45,50 +31,70 @@ export function createMockSimulationAdapter(): SimulationAdapter {
       }
 
       return {
-        simulationSummary: "Mock simulation passed"
+        simulationSummary: "Mock simulation passed",
+        success: true
       };
     }
   };
 }
 
-export function createRpcPreflightSimulationAdapter(options?: {
+export function createRpcSimulationAdapter(options?: {
   fetchImpl?: typeof fetch;
   rpcUrl?: string;
 }): SimulationAdapter {
-  const fetchImpl = options?.fetchImpl ?? globalThis.fetch;
-  const rpcUrl = options?.rpcUrl ?? "https://api.mainnet-beta.solana.com";
+  const fetchImpl = options?.fetchImpl || globalThis.fetch;
+  // 使用 Helius 免费节点或提供的 RPC
+  const rpcUrl = options?.rpcUrl || "https://mainnet.helius-rpc.com/?api-key=827faf6e-07f0-45a2-9096-27f3d9e97217";
 
   return {
-    async simulate(_intent: SIPIntent): Promise<SimulationResult> {
-      if (!fetchImpl) {
-        throw new Error("Fetch is unavailable");
+    async simulate(_intent: SIPIntent, transaction?: string | null): Promise<SimulationResult> {
+      if (!transaction) {
+        return {
+          simulationSummary: "No transaction payload to simulate.",
+          success: false
+        };
       }
 
       const response = await fetchImpl(rpcUrl, {
         method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: 1,
-          method: "getLatestBlockhash",
-          params: [{ commitment: "processed" }]
+          method: "simulateTransaction",
+          params: [
+            transaction,
+            {
+              encoding: "base64",
+              commitment: "processed",
+              replaceRecentBlockhash: true
+            }
+          ]
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`RPC preflight failed with status ${response.status}`);
+      const payload = (await response.json()) as RpcSimulationResponse;
+
+      if (payload.error) {
+        throw new Error(payload.error.message);
       }
 
-      const payload = (await response.json()) as RpcPreflightResponse;
+      const value = payload.result?.value;
+      if (!value) {
+        throw new Error("Invalid RPC simulation response");
+      }
 
-      if (!isUsablePreflightResponse(payload)) {
-        throw new Error("RPC preflight response is missing required fields");
+      if (value.err) {
+        return {
+          simulationSummary: `Simulation failed: ${JSON.stringify(value.err)}`,
+          success: false,
+          error: JSON.stringify(value.err)
+        };
       }
 
       return {
-        simulationSummary: `RPC preflight ready at slot ${payload.result.context.slot}`
+        simulationSummary: `Success: Consumed ${value.unitsConsumed || 0} CU.`,
+        success: true
       };
     }
   };
@@ -99,16 +105,17 @@ export function createDefaultSimulationAdapter(options?: {
   rpcUrl?: string;
   fallbackAdapter?: SimulationAdapter;
 }): SimulationAdapter {
-  const liveAdapter = createRpcPreflightSimulationAdapter(options);
-  const fallbackAdapter =
-    options?.fallbackAdapter ?? createMockSimulationAdapter();
+  const liveAdapter = createRpcSimulationAdapter(options);
+  const fallbackAdapter = options?.fallbackAdapter || createMockSimulationAdapter();
 
   return {
-    async simulate(intent: SIPIntent): Promise<SimulationResult> {
+    async simulate(intent: SIPIntent, transaction?: string | null): Promise<SimulationResult> {
       try {
-        return await liveAdapter.simulate(intent);
+        const result = await liveAdapter.simulate(intent, transaction);
+        // 如果 RPC 成功返回了结果（无论模拟成功还是失败），我们都使用它
+        return result;
       } catch {
-        return fallbackAdapter.simulate(intent);
+        return fallbackAdapter.simulate(intent, transaction);
       }
     }
   };

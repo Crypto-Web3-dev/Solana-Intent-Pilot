@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  canRetrySubmission,
-  findSignableTab,
-  hasSubmissionTimedOut
+  findSignableTab
 } from "../../src/sidepanel/wallet-bridge";
 
 describe("wallet bridge tab selection", () => {
@@ -12,6 +10,32 @@ describe("wallet bridge tab selection", () => {
       { id: 2, url: "https://example.com" },
       { id: 3, url: "https://x.com" }
     ]);
+
+    expect(tab?.id).toBe(2);
+  });
+
+  it("prefers a matching normal tab when one is explicitly selected", () => {
+    const tab = findSignableTab(
+      [
+        { id: 1, url: "chrome-extension://abc/index.html" },
+        { id: 2, url: "https://example.com" },
+        { id: 3, url: "https://x.com" }
+      ],
+      3
+    );
+
+    expect(tab?.id).toBe(3);
+  });
+
+  it("falls back to another normal tab when the preferred tab is not signable", () => {
+    const tab = findSignableTab(
+      [
+        { id: 1, url: "chrome-extension://abc/index.html" },
+        { id: 2, url: "https://example.com" },
+        { id: 3, url: "chrome://extensions" }
+      ],
+      3
+    );
 
     expect(tab?.id).toBe(2);
   });
@@ -37,21 +61,5 @@ describe("wallet bridge tab selection", () => {
     expect(
       findSignableTab([{ id: 1, url: "chrome://extensions" }])
     ).toBeUndefined();
-  });
-
-  it("allows one retry for transient submission errors", () => {
-    expect(canRetrySubmission("transient network error", 0, 1)).toBe(true);
-    expect(canRetrySubmission("transient network error", 1, 1)).toBe(false);
-  });
-
-  it("treats non-transient submission errors as non-retryable", () => {
-    expect(canRetrySubmission("Wallet provider not available", 0, 1)).toBe(
-      false
-    );
-  });
-
-  it("detects when a submission has timed out", () => {
-    expect(hasSubmissionTimedOut(1_000, 6_500, 5_000)).toBe(true);
-    expect(hasSubmissionTimedOut(1_000, 5_900, 5_000)).toBe(false);
   });
 });

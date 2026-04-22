@@ -32,10 +32,7 @@ type ChromeApi = {
 const chromeApi = (globalThis as typeof globalThis & { chrome?: ChromeApi }).chrome;
 
 function canInjectIntoUrl(url?: string) {
-  if (!url) {
-    return false;
-  }
-
+  if (!url) return false;
   return url.startsWith("http://") || url.startsWith("https://");
 }
 
@@ -45,205 +42,178 @@ type BrowserTab = {
   pendingUrl?: string;
 };
 
-export function findSignableTab(tabs: BrowserTab[]) {
+export function findSignableTab(tabs: BrowserTab[], preferredTabId?: number) {
+  const preferredTab = preferredTabId ? tabs.find((tab) => tab.id === preferredTabId) : undefined;
+  if (preferredTab && canInjectIntoUrl(preferredTab.url ?? preferredTab.pendingUrl)) {
+    return preferredTab;
+  }
   return tabs.find((tab) => canInjectIntoUrl(tab.url ?? tab.pendingUrl));
 }
 
-export function canRetrySubmission(
-  reason: string,
-  attempt: number,
-  maxRetries: number
-) {
-  const transient =
-    reason.includes("transient") ||
-    reason.includes("temporarily") ||
-    reason.includes("network");
-
-  return transient && attempt < maxRetries;
-}
-
-export function hasSubmissionTimedOut(
-  startedAt: number,
-  now: number,
-  timeoutMs: number
-) {
-  return now - startedAt >= timeoutMs;
-}
-
-export async function detectWalletStatus(): Promise<WalletStatus> {
+export async function detectWalletStatus(
+  preferredTabId?: number
+): Promise<{ status: WalletStatus; address?: string }> {
   if (!chromeApi?.tabs?.query || !chromeApi?.scripting?.executeScript) {
-    return "failed";
+    return { status: "unknown" };
   }
 
-  const tabs = await chromeApi.tabs.query({
-    currentWindow: true
-  });
-  const tab = findSignableTab(tabs);
+  const tabs = await chromeApi.tabs.query({ currentWindow: true });
+  const tab = findSignableTab(tabs, preferredTabId);
+  if (!tab?.id) return { status: "unsupported-page" };
 
-  if (!tab?.id) {
-    return "unsupported-page";
+  try {
+    const results = await chromeApi.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: "MAIN",
+      args: [],
+      func: () => {
+        const solana = (window as any).solana;
+        if (!solana) return null;
+        return {
+          isConnected: solana.isConnected || false,
+          publicKey: solana.publicKey?.toBase58() || null
+        };
+      }
+    });
+
+    const result = results.at(0)?.result as any;
+    if (!result) return { status: "provider-missing" };
+    return {
+      status: "ready",
+      address: result.publicKey || undefined
+    };
+  } catch {
+    return { status: "unknown" };
   }
-
-  const results = await chromeApi.scripting.executeScript({
-    target: { tabId: tab.id },
-    world: "MAIN",
-    args: ["", {} as SIPIntent, {} as ExecutionPreview],
-    func: () => {
-      const solana = (window as typeof window & {
-        solana?: unknown;
-      }).solana;
-
-      return Boolean(solana);
-    }
-  });
-
-  return results.at(0)?.result ? "ready" : "provider-missing";
 }
 
 export async function submitViaPageBridge(
   requestId: string,
   intent: SIPIntent,
-  preview: ExecutionPreview
-): Promise<{
-  signature: string;
-  explorerUrl?: string;
-}> {
-  if (!chromeApi?.tabs?.query || !chromeApi?.scripting?.executeScript) {
-    throw new Error("Chrome scripting API is unavailable");
+  preview: ExecutionPreview,
+  preferredTabId?: number
+): Promise<{ signature: string; explorerUrl?: string }> {
+  if (!chromeApi?.tabs?.query || !chromeApi?.scripting) {
+    throw new Error("Chrome API is unavailable");
   }
 
-  const tabs = await chromeApi.tabs.query({
-    currentWindow: true
-  });
+  const tabs = await chromeApi.tabs.query({ currentWindow: true, active: true });
+  const tab = findSignableTab(tabs, preferredTabId);
+  if (!tab?.id) throw new Error("Wallet signing is only available on normal web pages.");
 
-  const tab = findSignableTab(tabs);
-  if (!tab?.id) {
-    throw new Error(
-      "Wallet signing is only available on normal web pages. Please switch to an http(s) tab."
-    );
-  }
+  console.log("[SIP Bridge] Directly calling wallet via executeScript...");
 
-  const tabUrl = tab.url ?? tab.pendingUrl;
+  try {
+    const results = await chromeApi.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: "MAIN",
+      args: [preview.swapTransaction],
+      func: async (base64Transaction: string | null) => {
+        console.log("[SIP] Injected script started");
+        const solana = (window as any).solana;
+        const solanaWeb3 = (window as any).solanaWeb3;
 
-  if (!canInjectIntoUrl(tabUrl)) {
-    throw new Error(
-      "Wallet signing is only available on normal web pages. Please switch to an http(s) page."
-    );
-  }
+        if (!solana) return { error: "Wallet not found. Please open Phantom." };
+        if (!base64Transaction) return { error: "Transaction payload is empty." };
+        
+        try {
+          if (solana.connect) await solana.connect();
+          
+          const actualTaker = solana.publicKey?.toBase58();
+          console.log("[SIP] Wallet connected:", actualTaker);
 
-  const results = await chromeApi.scripting.executeScript({
-    target: { tabId: tab.id },
-    world: "MAIN",
-    args: [requestId, intent, preview],
-    func: async (activeRequestId, activeIntent, activePreview) => {
-      void activeIntent;
-      void activePreview;
+          // 解码 Base64
+          const binaryString = atob(base64Transaction);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
 
-      const solana = (window as typeof window & {
-        solana?: {
-          connect?: () => Promise<void>;
-          signAndSendTransaction?: (
-            transaction: unknown
-          ) => Promise<{ signature: string }>;
-          signTransaction?: (transaction: unknown) => Promise<unknown>;
-        };
-      }).solana;
+          let txToSign: any;
 
-      if (!solana) {
-        throw new Error("Wallet provider not available in page context");
+          // 处理 Versioned Transaction
+          if (solanaWeb3 && solanaWeb3.VersionedTransaction) {
+            console.log("[SIP] Deserializing Versioned Transaction using page library...");
+            txToSign = solanaWeb3.VersionedTransaction.deserialize(bytes);
+          } else {
+            console.warn("[SIP] solanaWeb3 not found on page. Using Duck-Typing shim...");
+            // 核心修复：如果页面没有 web3 库，我们构造一个伪装对象
+            // 钱包通常只需要调用 .serialize() 即可获得最终字节流
+            txToSign = {
+              serialize: () => bytes,
+              // 某些钱包可能还会检查这些字段，我们给个空引用
+              message: {
+                staticAccountKeys: [],
+                compiledInstructions: [],
+                header: {
+                  numRequiredSignatures: 0,
+                  numReadonlySignedAccounts: 0,
+                  numReadonlyUnsignedAccounts: 0
+                }
+              },
+              signatures: []
+            };
+          }
+
+          console.log("[SIP] Requesting signature from wallet...");
+          // 对于 Versioned Transaction，通常直接传对象即可
+          const result = await solana.signAndSendTransaction(txToSign);
+          console.log("[SIP] Signature obtained:", result.signature);
+          return { signature: result.signature };
+        } catch (e: any) {
+          console.error("[SIP] Injected error:", e);
+          return { error: e.message || String(e) };
+        }
       }
+    });
 
-      if (typeof solana.connect === "function") {
-        await solana.connect();
-      }
-
-      if (typeof solana.signAndSendTransaction === "function") {
-        const signed = await solana.signAndSendTransaction({});
-
-        return {
-          signature: signed.signature,
-          explorerUrl: `https://explorer.solana.com/tx/${signed.signature}`
-        };
-      }
-
-      if (typeof solana.signTransaction === "function") {
-        await solana.signTransaction({});
-
-        return {
-          signature: `signed-${activeRequestId}`,
-          explorerUrl: `https://explorer.solana.com/tx/signed-${activeRequestId}`
-        };
-      }
-
-      throw new Error("No compatible wallet signing method found");
+    const result = (results.at(0)?.result || {}) as any;
+    
+    if (result.error) {
+      throw new Error(result.error);
     }
-  });
 
-  const result = results.at(0)?.result;
+    if (!result.signature) {
+      throw new Error("No signature returned from injected script.");
+    }
 
-  if (!result || "error" in result) {
-    throw new Error(result?.error ?? "Wallet submission failed");
+    return {
+      signature: result.signature,
+      explorerUrl: `https://explorer.solana.com/tx/${result.signature}`
+    };
+  } catch (err: any) {
+    console.error("[SIP Bridge] Final Error:", err.message);
+    throw err;
   }
-
-  return result as { signature: string; explorerUrl?: string };
 }
 
 export async function submitWithLifecycle(
   requestId: string,
   intent: SIPIntent,
   preview: ExecutionPreview,
+  preferredTabId?: number,
   options: SubmissionLifecycleOptions = {
-    settlementTimeoutMs: 5_000,
-    maxRetries: 1
+    settlementTimeoutMs: 60_000, // 增加到 60 秒以确保用户有充足时间确认
+    maxRetries: 0
   }
-): Promise<{
-  outcome: SubmissionOutcome;
-  signature?: string;
-  explorerUrl?: string;
-}> {
-  let attempt = 0;
-  let lastError: string | null = null;
+): Promise<{ outcome: SubmissionOutcome; signature?: string; explorerUrl?: string; error?: string }> {
+  try {
+    const submission = await Promise.race([
+      submitViaPageBridge(requestId, intent, preview, preferredTabId),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => { reject(new Error("Timeout: User did not sign the transaction in time.")); }, options.settlementTimeoutMs);
+      })
+    ]);
 
-  while (attempt <= options.maxRetries) {
-    const startedAt = Date.now();
-
-    try {
-      const submission = await Promise.race([
-        submitViaPageBridge(requestId, intent, preview),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => {
-            reject(new Error("Submission timeout"));
-          }, options.settlementTimeoutMs);
-        })
-      ]);
-
-      return {
-        outcome: "settled",
-        signature: submission.signature,
-        explorerUrl: submission.explorerUrl
-      };
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : "Wallet submission failed";
-
-      if (
-        canRetrySubmission(lastError, attempt, options.maxRetries) &&
-        !hasSubmissionTimedOut(startedAt, Date.now(), options.settlementTimeoutMs)
-      ) {
-        attempt += 1;
-        continue;
-      }
-
-      break;
-    }
-  }
-
-  if (lastError?.includes("timeout")) {
     return {
-      outcome: "timeout"
+      outcome: "settled",
+      signature: submission.signature,
+      explorerUrl: submission.explorerUrl
+    };
+  } catch (error: any) {
+    return {
+      outcome: error.message.includes("Timeout") ? "timeout" : "failed",
+      error: error.message || "Unknown submission error"
     };
   }
-
-  return {
-    outcome: "failed"
-  };
 }

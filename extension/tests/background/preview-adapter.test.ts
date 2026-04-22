@@ -26,13 +26,15 @@ const validIntent: SIPIntent = {
 describe("policy preview adapter", () => {
   it("combines live quote and live simulation results into one preview", async () => {
     const quoteAdapter: QuoteAdapter = {
-      getQuote: vi.fn().mockResolvedValue({
-        routeLabel: "Jupiter",
-        inputAmount: "1000000000",
-        outputAmount: "250000000",
-        slippageBps: 50,
-        estimatedFeeLamports: "5000"
-      })
+      getOrder: vi.fn().mockResolvedValue({
+        quote: {
+          inAmount: "1000000000",
+          outAmount: "250000000",
+          feeAmount: "5000"
+        },
+        swapTransaction: "real-tx-payload"
+      }),
+      executeSwap: vi.fn()
     };
     const simulationAdapter: SimulationAdapter = {
       simulate: vi.fn().mockResolvedValue({
@@ -50,6 +52,7 @@ describe("policy preview adapter", () => {
     expect(preview.requestId).toBe("req-preview");
     expect(preview.routeLabel).toBe("Jupiter");
     expect(preview.outputAmount).toBe("250000000");
+    expect(preview.swapTransaction).toBe("real-tx-payload");
     expect(preview.simulationSummary).toBe("RPC preflight ready at slot 123456");
   });
 });

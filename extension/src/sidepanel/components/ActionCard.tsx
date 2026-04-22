@@ -3,99 +3,6 @@ import type { ClarificationPayload } from "../../shared/intent";
 import type { WorkflowPhase, WorkflowReason } from "../../shared/workflow";
 import type { WalletStatus } from "../wallet-state";
 
-function phaseMessage(phase: WorkflowPhase, reason: WorkflowReason | string | null) {
-  if (phase === "blocked" && reason === "unsupported-page") {
-    return "Signing is only available on normal web pages. Please switch to an http(s) tab.";
-  }
-
-  if (phase === "blocked") {
-    return "Execution is blocked by policy.";
-  }
-
-  if (phase === "failed") {
-    return `Execution failed${reason ? `: ${reason}` : ""}`;
-  }
-
-  if (phase === "idle" && reason === "clarification-required") {
-    return "More information is needed before we can continue.";
-  }
-
-  if (phase === "awaiting-signature") {
-    return "Preview is ready. Waiting for wallet confirmation.";
-  }
-
-  if (phase === "submitting") {
-    return "Transaction is being submitted.";
-  }
-
-  if (phase === "confirmed") {
-    return "Transaction confirmed.";
-  }
-
-  if (phase === "simulating") {
-    return "Simulation in progress.";
-  }
-
-  if (phase === "quoting") {
-    return "Quote in progress.";
-  }
-
-  return `Phase: ${phase}`;
-}
-
-function actionHint(phase: WorkflowPhase, reason: WorkflowReason | string | null) {
-  if (phase === "blocked" && reason === "unsupported-page") {
-    return "Open a normal website tab and try again.";
-  }
-
-  if (phase === "blocked") {
-    return "Return to the request and adjust the intent.";
-  }
-
-  return null;
-}
-
-function walletMessage(walletStatus: WalletStatus, isSigning: boolean) {
-  if (isSigning || walletStatus === "connecting") {
-    return "Waiting for your wallet to respond.";
-  }
-
-  if (walletStatus === "submitted") {
-    return "Transaction submitted. Waiting for chain confirmation.";
-  }
-
-  if (walletStatus === "provider-missing") {
-    return "No Solana wallet was detected on the current page.";
-  }
-
-  if (walletStatus === "unsupported-page") {
-    return "Switch to a normal website tab before trying to sign.";
-  }
-
-  if (walletStatus === "ready") {
-    return "Wallet provider detected on the current page.";
-  }
-
-  if (walletStatus === "failed") {
-    return "We could not verify wallet availability yet.";
-  }
-
-  return null;
-}
-
-function clarificationTitle(kind: ClarificationPayload["kind"]) {
-  switch (kind) {
-    case "missing-output-mint":
-      return "Missing token candidate";
-    case "unknown-output-mint":
-      return "Unknown token candidate";
-    case "ambiguous-output-mint":
-      return "Ambiguous token candidate";
-    case "underspecified-request":
-      return "Request too vague";
-  }
-}
-
 export function ActionCard({
   preview,
   phase,
@@ -105,8 +12,6 @@ export function ActionCard({
   isSigning,
   onConfirm,
   onCancel,
-  onFailSubmit,
-  onSettle,
   onOpenNormalPage
 }: {
   preview: ExecutionPreview | null;
@@ -121,50 +26,95 @@ export function ActionCard({
   onSettle: () => void;
   onOpenNormalPage: () => void;
 }) {
+  const isSucceeded = phase === "confirmed" || (phase === "idle" && reason === "transaction-settled");
+  const isFailed = phase === "failed";
   const isUnsupportedPage = phase === "blocked" && reason === "unsupported-page";
-  const isWalletReady = walletStatus === "ready";
-  const walletHint = walletMessage(walletStatus, isSigning);
+  
+  if (isSucceeded) {
+    return (
+      <div className="success-card" style={{ padding: 16, borderRadius: 12, textAlign: "center" }}>
+        <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+        <div style={{ fontWeight: "bold", fontSize: 18 }}>Transaction Complete</div>
+        <div style={{ fontSize: 13, marginTop: 8, opacity: 0.9 }}>
+          Your swap was successfully executed on Solana.
+        </div>
+        {preview?.signature && (
+          <a 
+            href={`https://solscan.io/tx/${preview.signature}`} 
+            target="_blank" 
+            className="explorer-button"
+            rel="noreferrer"
+          >
+            View on Solscan
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  if (isFailed) {
+    return (
+      <div style={{ padding: 12, background: "rgba(239, 68, 68, 0.1)", border: "1px solid #ef4444", borderRadius: 12 }}>
+        <div style={{ fontWeight: "bold", color: "#ef4444" }}>Execution Failed</div>
+        <div style={{ fontSize: 12, marginTop: 4 }}>{reason || "An unknown error occurred during execution."}</div>
+        <button onClick={onCancel} style={{ marginTop: 12, padding: "6px 12px", borderRadius: 8, border: "1px solid #ef4444", background: "none", color: "#ef4444", cursor: "pointer" }}>
+          Try Again
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <div>{phaseMessage(phase, reason)}</div>
-      {actionHint(phase, reason) ? <div>{actionHint(phase, reason)}</div> : null}
-      {phase === "idle" && reason === "clarification-required" ? (
-        <div>
-          <div>Clarification needed</div>
-          <div>{clarification?.message ?? "More information is needed before we can continue."}</div>
-          <div>{clarificationTitle(clarification?.kind ?? "underspecified-request")}</div>
-          {clarification?.candidateSymbols?.length ? (
-            <div>Possible tokens: {clarification.candidateSymbols.join(", ")}</div>
-          ) : null}
-        </div>
-      ) : null}
-      {walletHint ? <div>{walletHint}</div> : null}
+    <div style={{ padding: 12, border: "1px solid #334155", borderRadius: 12, background: "rgba(15, 23, 42, 0.3)" }}>
+      <div style={{ fontSize: 12, color: "#94a3b8", textTransform: "uppercase", marginBottom: 8 }}>Execution Preview</div>
+      
       {preview ? (
-        <div>
-          <div>Route: {preview.routeLabel}</div>
-          <div>Output: {preview.outputAmount}</div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span>Route</span>
+            <span style={{ fontWeight: "bold", color: "#38bdf8" }}>{preview.routeLabel}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span>Min Output</span>
+            <span style={{ fontWeight: "bold" }}>{preview.outputAmount} tokens</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.7 }}>
+            <span>Est. Fee</span>
+            <span>{preview.estimatedFeeLamports} lamports</span>
+          </div>
+          <div style={{ marginTop: 8, fontSize: 11, fontStyle: "italic", opacity: 0.8 }}>
+            Sim: {preview.simulationSummary}
+          </div>
         </div>
-      ) : null}
-      {phase === "awaiting-signature" ? (
-        <div>
-          <button onClick={onConfirm} disabled={!isWalletReady || isSigning}>
-            {isSigning ? "Confirming..." : "Confirm Signature"}
+      ) : (
+        <div style={{ margin: "20px 0", textAlign: "center", color: "#64748b" }}>
+          {phase === "quoting" || phase === "simulating" ? "Preparing preview..." : "Waiting for intent..."}
+        </div>
+      )}
+
+      {phase === "awaiting-signature" && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <button 
+            onClick={onConfirm} 
+            disabled={isSigning}
+            style={{ flex: 1, padding: 12, borderRadius: 10, background: "#38bdf8", color: "#082f49", fontWeight: "bold", border: 0, cursor: isSigning ? "not-allowed" : "pointer" }}
+          >
+            {isSigning ? "Sign in Wallet..." : "Confirm & Swap"}
           </button>
-          <button onClick={onCancel}>Mock Cancel Signature</button>
+          <button 
+            onClick={onCancel}
+            style={{ padding: 12, borderRadius: 10, background: "rgba(100, 116, 139, 0.2)", color: "white", border: 0, cursor: "pointer" }}
+          >
+            Cancel
+          </button>
         </div>
-      ) : null}
-      {isUnsupportedPage ? (
-        <div>
-          <button onClick={onOpenNormalPage}>Open normal webpage</button>
-        </div>
-      ) : null}
-      {phase === "submitting" ? (
-        <div>
-          <button onClick={onSettle}>Mock Settle</button>
-          <button onClick={onFailSubmit}>Mock Submit Failure</button>
-        </div>
-      ) : null}
+      )}
+
+      {isUnsupportedPage && (
+        <button onClick={onOpenNormalPage} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#f59e0b", color: "black", border: 0, fontWeight: "bold", cursor: "pointer" }}>
+          Switch to normal tab
+        </button>
+      )}
     </div>
   );
 }

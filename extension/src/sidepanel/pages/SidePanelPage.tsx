@@ -75,7 +75,7 @@ export function SidePanelPage() {
           style={panelStyles.input}
         />
         <button onClick={() => void state.submit(input)} style={panelStyles.button}>
-          Submit Mock Intent
+          Submit Intent
         </button>
       </section>
 

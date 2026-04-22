@@ -18,8 +18,8 @@ describe("RiskIndicator", () => {
       />
     );
 
-    expect(html).toContain("Risk: unknown - data is incomplete");
-    expect(html).toContain("Risk source:");
-    expect(html).toContain("policy fallback");
+    expect(html).toContain("UNKNOWN");
+    expect(html).toContain("Insufficient data");
+    expect(html).toContain("Heuristic Policy");
   });
 });

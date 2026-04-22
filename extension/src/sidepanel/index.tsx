@@ -1,5 +1,7 @@
+import "./styles.css";
 import { SidePanelPage } from "./pages/SidePanelPage";
 
-export default function SidePanelEntry() {
+export default function SidePanel() {
   return <SidePanelPage />;
 }
+

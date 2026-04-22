@@ -1,10 +1,7 @@
-import type { DetectedContextSnapshot } from "../shared/context";
-import type { ExecutionPreview } from "../shared/execution";
-import type { SIPIntent } from "../shared/intent";
-import type { SecurityReport } from "../shared/risk";
 import { createDefaultIntentParser } from "./intent-parser";
-import { createMockPreviewAdapter, createPolicyPreviewAdapter } from "./preview-adapter";
+import { createPolicyPreviewAdapter } from "./preview-adapter";
 import { createDefaultRiskAdapter } from "./risk-adapter";
+import { createDefaultQuoteAdapter } from "./quote-adapter";
 
 export interface RuntimeServices {
   parseIntent(
@@ -22,6 +19,22 @@ export function createMockRuntimeServices(): RuntimeServices {
   const parser = createDefaultIntentParser();
   const riskAdapter = createDefaultRiskAdapter();
   const previewAdapter = createPolicyPreviewAdapter();
+
+  return {
+    parseIntent: parser.parseIntent,
+    scanRisk: riskAdapter.scanRisk,
+    buildPreview: previewAdapter.buildPreview
+  };
+}
+
+export function createProductionRuntimeServices(config: {
+  jupiterBaseUrl?: string;
+}): RuntimeServices {
+  const parser = createDefaultIntentParser();
+  const riskAdapter = createDefaultRiskAdapter();
+  const previewAdapter = createPolicyPreviewAdapter({
+    quoteAdapter: createDefaultQuoteAdapter({ baseUrl: config.jupiterBaseUrl })
+  });
 
   return {
     parseIntent: parser.parseIntent,

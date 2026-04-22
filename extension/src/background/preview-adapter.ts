@@ -46,10 +46,25 @@ export function createPolicyPreviewAdapter(options?: {
         throw new Error("Intent is required to build a preview");
       }
 
-      const quote = await quoteAdapter.getQuote(intent);
-      const simulation = await simulationAdapter.simulate(intent);
+      // 1. 获取报价和交易载荷
+      const { quote, swapTransaction } = await quoteAdapter.getOrder(intent);
+      
+      // 2. 使用真实的交易载荷进行模拟
+      const simulation = await simulationAdapter.simulate(intent, swapTransaction);
 
-      return combinePreview(requestId, quote, simulation);
+      // 计算手续费总和
+      const totalFee = (Number(quote.signatureFeeLamports || 0) + Number(quote.prioritizationFeeLamports || 0)).toString();
+
+      return {
+        requestId,
+        routeLabel: "Jupiter",
+        inputAmount: quote.inAmount,
+        outputAmount: quote.outAmount,
+        slippageBps: intent.payload.slippageBps,
+        estimatedFeeLamports: totalFee,
+        simulationSummary: simulation.simulationSummary,
+        swapTransaction // 存储交易载荷供后续签名使用
+      };
     }
   };
 }

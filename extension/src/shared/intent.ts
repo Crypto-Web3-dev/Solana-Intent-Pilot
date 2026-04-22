@@ -23,6 +23,7 @@ export interface SIPIntent {
     amountMode: AmountMode;
     slippageBps: number;
     platform: string;
+    userPublicKey?: string;
   };
   metadata: {
     reasoning: string;

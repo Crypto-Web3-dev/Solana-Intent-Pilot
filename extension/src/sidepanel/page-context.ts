@@ -2,27 +2,25 @@ import type { DetectedContextSnapshot, TokenHint } from "../shared/context";
 
 type ChromeTabsApi = {
   query(queryInfo: {
+    active?: boolean;
     currentWindow?: boolean;
+    lastFocusedWindow?: boolean;
   }): Promise<Array<{ id?: number; url?: string; title?: string }>>;
-};
-
-type ChromeScriptingApi = {
-  executeScript<T>(options: {
-    target: { tabId: number; allFrames?: boolean };
-    world?: "MAIN" | "ISOLATED";
-    args?: unknown[];
-    func: (...args: unknown[]) => Promise<T> | T;
-  }): Promise<Array<{ result?: T }>>;
+  sendMessage?<T>(
+    tabId: number,
+    message: { type: string }
+  ): Promise<T>;
 };
 
 type ChromeApi = {
   tabs?: ChromeTabsApi;
-  scripting?: ChromeScriptingApi;
 };
 
-const chromeApi = (globalThis as typeof globalThis & {
-  chrome?: ChromeApi;
-}).chrome;
+function getChromeApi() {
+  return (globalThis as typeof globalThis & {
+    chrome?: ChromeApi;
+  }).chrome;
+}
 const HINT_STOP_WORDS = new Set([
   "the",
   "and",
@@ -149,145 +147,54 @@ export function selectCurrentPageContext(
 }
 
 export async function getCurrentPageContext() {
+  const chromeApi = getChromeApi();
+
   if (!chromeApi?.tabs?.query) {
     return null;
   }
 
-  const tabs = await chromeApi.tabs.query({
-    currentWindow: true
-  });
   const detectedAt = new Date().toISOString();
-  const baseContext = selectCurrentPageContext(tabs, detectedAt);
+  const tabScopes = [
+    { active: true, currentWindow: true },
+    { currentWindow: true },
+    { lastFocusedWindow: true },
+    {}
+  ] as const;
+
+  let baseContext: DetectedContextSnapshot | null = null;
+
+  for (const scope of tabScopes) {
+    const tabs = await chromeApi.tabs.query(scope);
+    baseContext = selectCurrentPageContext(tabs, detectedAt);
+
+    if (baseContext) {
+      break;
+    }
+  }
 
   if (!baseContext?.tabId) {
     return null;
   }
 
-  if (!chromeApi?.scripting?.executeScript) {
-    return baseContext;
-  }
-
-  const pageResults = await chromeApi.scripting.executeScript<{
-    selectedText?: string;
-    rawHints: string[];
-    detectedTokens: TokenHint[];
-  }>({
-    target: { tabId: baseContext.tabId },
-    world: "MAIN",
-    func: () => {
-      type PageTokenSource = "twitter" | "birdeye" | "dexscreener" | "generic";
-      type PageTokenHint = {
-        symbol?: string;
-        mint?: string;
-        source: PageTokenSource;
-        confidence: number;
-      };
-      const hintStopWords = new Set([
-        "the",
-        "and",
-        "for",
-        "with",
-        "now",
-        "this",
-        "that",
-        "from",
-        "your",
-        "page",
-        "address",
-        "token"
-      ]);
-      const selectedText = window.getSelection?.()?.toString().trim() || undefined;
-      const bodyText = document.body?.innerText ?? "";
-      const pageText = `${document.title ?? ""}\n${bodyText}`;
-      const detectSource = (url: string): PageTokenSource => {
-        if (url.includes("x.com") || url.includes("twitter.com")) {
-          return "twitter";
-        }
-
-        if (url.includes("dexscreener.com")) {
-          return "dexscreener";
-        }
-
-        if (url.includes("birdeye.so")) {
-          return "birdeye";
-        }
-
-        return "generic";
-      };
-      const source = detectSource(window.location.href);
-      const rawHints = Array.from(
-        new Set(
-          (bodyText.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [])
-            .filter((token) => !hintStopWords.has(token))
-            .slice(0, 5)
-        )
-      );
-      const cashtags = Array.from(
-        new Set(
-          Array.from(pageText.matchAll(/\$([A-Z0-9]{2,10})/g), (match) => match[1])
-        )
-      );
-      const upperSymbols = Array.from(
-        new Set(
-          (pageText.match(/\b[A-Z]{2,10}\b/g) ?? []).filter(
-            (token) => token !== "USD"
-          )
-        )
-      );
-      const mintMatch =
-        window.location.href.match(/\/solana\/([1-9A-HJ-NP-Za-km-z]{32,44})/) ??
-        pageText.match(/\b([1-9A-HJ-NP-Za-km-z]{32,44})\b/);
-      const hints: PageTokenHint[] = [];
-
-      if (mintMatch?.[1] && source !== "twitter") {
-        hints.push({
-          mint: mintMatch[1],
-          source,
-          confidence: 0.92
-        });
-      }
-
-      for (const symbol of cashtags) {
-        hints.push({
-          symbol,
-          source,
-          confidence: source === "twitter" ? 0.82 : 0.76
-        });
-      }
-
-      for (const symbol of upperSymbols.slice(0, 3)) {
-        hints.push({
-          symbol,
-          source,
-          confidence: source === "generic" ? 0.58 : 0.72
-        });
-      }
-      const detectedTokens = hints.filter((hint, index, items) => {
-        const key = `${hint.source}:${hint.symbol ?? ""}:${hint.mint ?? ""}`;
-
-        return (
-          items.findIndex(
-            (candidate) =>
-              `${candidate.source}:${candidate.symbol ?? ""}:${candidate.mint ?? ""}` ===
-              key
-          ) === index
-        );
-      }).slice(0, 3);
-
-      return {
-        selectedText,
-        rawHints,
-        detectedTokens
-      };
-    }
-  });
-
-  const pageContext = pageResults.at(0)?.result;
+  const pageContext = chromeApi.tabs.sendMessage
+    ? await chromeApi.tabs
+        .sendMessage<{
+          type: "context.detected";
+          payload: {
+            selectedText?: string;
+            rawHints: string[];
+            detectedTokens: TokenHint[];
+          };
+        }>(baseContext.tabId, {
+          type: "context.snapshot.requested"
+        })
+        .catch(() => null)
+    : null;
 
   return {
     ...baseContext,
-    selectedText: pageContext?.selectedText,
-    rawHints: pageContext?.rawHints ?? baseContext.rawHints,
-    detectedTokens: pageContext?.detectedTokens ?? baseContext.detectedTokens
+    selectedText: pageContext?.payload.selectedText,
+    rawHints: pageContext?.payload.rawHints ?? baseContext.rawHints,
+    detectedTokens: pageContext?.payload.detectedTokens ?? baseContext.detectedTokens
   };
 }

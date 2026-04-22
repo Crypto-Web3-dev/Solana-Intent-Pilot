@@ -15,7 +15,8 @@ const validIntent: SIPIntent = {
     amount: "1000000000",
     amountMode: "exact",
     slippageBps: 50,
-    platform: "Jupiter"
+    platform: "Jupiter",
+    userPublicKey: "FTp1BybZ51NiZKbnZH6MsrV3tUZNauhpQMbBcqYUEr5f"
   },
   metadata: {
     reasoning: "Swap to USDC",
@@ -26,69 +27,49 @@ const validIntent: SIPIntent = {
 };
 
 describe("default quote adapter", () => {
-  it("maps a Jupiter quote response into QuoteResult", async () => {
+  it("maps a Jupiter quote response into an Order result", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         inAmount: "1000000000",
-        outAmount: "250000000"
+        outAmount: "250000000",
+        transaction: "real-tx-data"
       })
     });
 
     const adapter = createDefaultQuoteAdapter({ fetchImpl });
-    const result = await adapter.getQuote(validIntent);
+    const result = await adapter.getOrder(validIntent);
 
-    expect(result.routeLabel).toBe("Jupiter");
-    expect(result.inputAmount).toBe("1000000000");
-    expect(result.outputAmount).toBe("250000000");
+    expect(result.quote.inAmount).toBe("1000000000");
+    expect(result.quote.outAmount).toBe("250000000");
+    expect(result.swapTransaction).toBe("real-tx-data");
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to the mock adapter when Jupiter fetch fails", async () => {
+  it("throws an error when Jupiter fetch fails and no fallback is provided", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error("network down"));
     const adapter = createDefaultQuoteAdapter({ fetchImpl });
 
-    const result = await adapter.getQuote(validIntent);
-
-    expect(result.routeLabel).toBe("Jupiter");
-    expect(result.inputAmount).toBe("1 SOL");
-    expect(result.outputAmount).toBe("100 USDC");
+    await expect(adapter.getOrder(validIntent)).rejects.toThrow("network down");
   });
 
   it("falls back to a custom adapter when Jupiter returns unusable data", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ outAmount: "250000000" })
+      json: async () => ({ error: "invalid" })
     });
     const fallbackAdapter: QuoteAdapter = {
-      getQuote: vi.fn().mockResolvedValue({
-        routeLabel: "Fallback",
-        inputAmount: "2 SOL",
-        outputAmount: "200 USDC",
-        slippageBps: 75,
-        estimatedFeeLamports: "6000"
-      })
+      getOrder: vi.fn().mockResolvedValue({
+        quote: { inAmount: "1", outAmount: "2" },
+        swapTransaction: "fallback-tx"
+      }),
+      executeSwap: vi.fn()
     };
 
     const adapter = createDefaultQuoteAdapter({ fetchImpl, fallbackAdapter });
-    const result = await adapter.getQuote(validIntent);
+    const result = await adapter.getOrder(validIntent);
 
-    expect(result.routeLabel).toBe("Fallback");
-    expect(result.inputAmount).toBe("2 SOL");
-    expect(result.outputAmount).toBe("200 USDC");
-    expect(fallbackAdapter.getQuote).toHaveBeenCalledWith(validIntent);
-  });
-
-  it("fails live quote mapping when required amounts are missing", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ inAmount: "1000000000" })
-    });
-
-    const adapter = createJupiterQuoteAdapter({ fetchImpl });
-
-    await expect(adapter.getQuote(validIntent)).rejects.toThrow(
-      "Jupiter quote response is missing required amounts"
-    );
+    expect(result.swapTransaction).toBe("fallback-tx");
+    expect(fallbackAdapter.getOrder).toHaveBeenCalledWith(validIntent);
   });
 });

@@ -6,4 +6,5 @@ export interface ExecutionPreview {
   slippageBps: number;
   estimatedFeeLamports: string;
   simulationSummary?: string;
+  swapTransaction?: string;
 }
