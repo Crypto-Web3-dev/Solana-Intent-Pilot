@@ -2,19 +2,22 @@ import type { SIPIntent } from "../shared/intent";
 import type { SecurityReport } from "../shared/risk";
 
 // 仅在非测试环境下导入，避免 Vitest (Node) 崩溃
-let initWasm: any;
-let scan_risk: any;
-let wasmUrl: string;
+let initWasm: ((opts?: { module_or_path?: string | ArrayBuffer }) => Promise<any>) | undefined;
+let scan_risk: ((intent_json: string) => string) | undefined;
+let wasmUrl: string | undefined;
+
+let wasmModulePromise: Promise<any> | null = null;
+let wasmUrlPromise: Promise<string> | null = null;
 
 if (typeof process === "undefined" || process.env.NODE_ENV !== "test") {
-  // @ts-ignore
-  import("./wasm/sip_risk_engine").then(m => {
+  wasmModulePromise = import("./wasm/sip_risk_engine").then(m => {
     initWasm = m.default;
     scan_risk = m.scan_risk;
+    return m;
   });
-  // @ts-ignore
-  import("url:./wasm/sip_risk_engine_bg.wasm").then(m => {
+  wasmUrlPromise = import("url:./wasm/sip_risk_engine_bg.wasm").then(m => {
     wasmUrl = m.default;
+    return m.default;
   });
 }
 
@@ -25,8 +28,11 @@ export interface WasmRiskEngine {
 class CoreWasmRiskEngine implements WasmRiskEngine {
   async scanRisk(intent: SIPIntent): Promise<SecurityReport | null> {
     try {
+      if (!scan_risk) {
+        console.error("[Wasm Engine] scan_risk is not available");
+        return null;
+      }
       console.log("[Wasm Engine] Scanning intent with Rust core...");
-      // 调用 Rust 导出的函数
       const resultJson = scan_risk(JSON.stringify(intent));
       return JSON.parse(resultJson) as SecurityReport;
     } catch (err) {
@@ -46,29 +52,44 @@ export async function loadDefaultWasmRiskEngine(): Promise<WasmRiskEngine | null
   }
 
   if (engineInstance) return engineInstance;
-  
+
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
     try {
+      // 等待 dynamic import 完成
+      if (wasmModulePromise && wasmUrlPromise) {
+        await Promise.all([wasmModulePromise, wasmUrlPromise]);
+      }
+
+      if (!initWasm || !wasmUrl) {
+        console.error("[Wasm Engine] Wasm module or URL not loaded");
+        initPromise = null;
+        return null;
+      }
+
       console.log("[Wasm Engine] Received raw asset URL from Plasmo:", wasmUrl);
-      
+
       // 修复双重前缀问题：Plasmo 生成的 URL 已经是正确的了
       // 如果它不是以 http 或 chrome 开头，我们才考虑手动转换
-      const finalUrl = wasmUrl.startsWith("http") || wasmUrl.startsWith("chrome-extension") 
-        ? wasmUrl 
+      const finalUrl = wasmUrl.startsWith("http") || wasmUrl.startsWith("chrome-extension")
+        ? wasmUrl
         : chrome.runtime.getURL(wasmUrl);
 
       console.log("[Wasm Engine] Initializing with final URL:", finalUrl);
-      
-      // 修复警告：最新的 wasm-bindgen 建议传递一个对象
-      // 如果报错，自动回退到原始传参方式
-      try {
-        await initWasm({ module_or_path: finalUrl });
-      } catch (e) {
-        await initWasm(finalUrl);
+
+      // 先 fetch wasm 文件，然后传入 ArrayBuffer
+      // 这绕过了 wasm-bindgen 的 fetch 逻辑，避免可能的 __proto__: null 问题
+      const response = await fetch(finalUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch wasm: ${response.status} ${response.statusText}`);
       }
-      
+      const wasmBytes = await response.arrayBuffer();
+      console.log("[Wasm Engine] Fetched wasm bytes:", wasmBytes.byteLength);
+
+      // 使用 wasm-bindgen 的初始化函数，传入 ArrayBuffer
+      await initWasm({ module_or_path: wasmBytes });
+
       engineInstance = new CoreWasmRiskEngine();
       console.log("[Wasm Engine] Successfully loaded.");
       return engineInstance;
