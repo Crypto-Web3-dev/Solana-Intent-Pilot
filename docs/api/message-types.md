@@ -85,6 +85,7 @@ export interface IntentParseRequestedMessage {
     tabId: number;
     userInput: string;
     contextSnapshot: DetectedContextSnapshot;
+    userPublicKey?: string;
   };
 }
 

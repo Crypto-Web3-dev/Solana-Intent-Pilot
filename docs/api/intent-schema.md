@@ -66,6 +66,7 @@ MVP 建议先只真正执行 `SWAP`，其它值可先保留为扩展位。
 | `amountMode` | `"exact" | "half" | "all"` | 数量来源 |
 | `slippageBps` | `number` | 滑点，单位 bps |
 | `platform` | `string` | 执行协议，例如 `Jupiter` |
+| `userPublicKey` | `string` | (可选) 用户的公钥，用于构建真实交易 |
 
 ### 3.4 `metadata`
 
@@ -93,6 +94,7 @@ export interface SIPIntent {
     amountMode: AmountMode;
     slippageBps: number;
     platform: string;
+    userPublicKey?: string;
   };
   metadata: {
     reasoning: string;

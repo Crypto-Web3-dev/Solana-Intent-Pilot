@@ -5,6 +5,8 @@ extension/build/
 extension/.plasmo/
 extension/user-data/
 
+risk-engine/target/
+
 .codex/
 learn/
 openspec/
