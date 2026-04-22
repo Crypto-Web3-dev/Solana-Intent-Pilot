@@ -1,6 +1,42 @@
 import type { SIPIntent } from "../shared/intent";
 import type { SecurityReport } from "../shared/risk";
 
+// 修复 wasm-bindgen 生成的 imports 对象使用 __proto__: null
+// 某些 Chrome 版本的 WebAssembly.instantiate 会拒绝这种对象
+function fixNullProtoImports(importObject: any): any {
+  if (!importObject || typeof importObject !== "object") {
+    return importObject;
+  }
+  const fixed: Record<string, any> = {};
+  for (const [key, value] of Object.entries(importObject)) {
+    if (value && typeof value === "object" && Object.getPrototypeOf(value) === null) {
+      fixed[key] = fixNullProtoImports(value);
+    } else if (typeof value === "function") {
+      fixed[key] = value;
+    } else {
+      fixed[key] = value;
+    }
+  }
+  return fixed;
+}
+
+let wasmPatchApplied = false;
+function applyWasmInstantiatePatch() {
+  if (wasmPatchApplied) return;
+  wasmPatchApplied = true;
+  const originalInstantiate = WebAssembly.instantiate;
+  (WebAssembly as any).instantiate = async function (
+    bufferSourceOrModule: any,
+    importObject?: any
+  ) {
+    if (importObject && Object.getPrototypeOf(importObject) === null) {
+      console.log("[Wasm Patch] Fixing __proto__: null imports object");
+      return originalInstantiate.call(this, bufferSourceOrModule, fixNullProtoImports(importObject));
+    }
+    return originalInstantiate.call(this, bufferSourceOrModule, importObject);
+  };
+}
+
 // 仅在非测试环境下导入，避免 Vitest (Node) 崩溃
 let initWasm: ((opts?: { module_or_path?: string | ArrayBuffer }) => Promise<any>) | undefined;
 let scan_risk: ((intent_json: string) => string) | undefined;
@@ -10,6 +46,7 @@ let wasmModulePromise: Promise<any> | null = null;
 let wasmUrlPromise: Promise<string> | null = null;
 
 if (typeof process === "undefined" || process.env.NODE_ENV !== "test") {
+  applyWasmInstantiatePatch();
   wasmModulePromise = import("./wasm/sip_risk_engine").then(m => {
     initWasm = m.default;
     scan_risk = m.scan_risk;
