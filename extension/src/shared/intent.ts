@@ -13,23 +13,24 @@ export interface ClarificationPayload {
   candidateSymbols?: string[];
 }
 
+export interface SIPAction {
+  id: string;
+  type: "SWAP" | "STAKE" | "LEND" | "TRANSFER";
+  payload: any;
+  status: "pending" | "ready" | "failed";
+}
+
 export interface SIPIntent {
-  intent: IntentType;
-  confidence: number;
-  payload: {
-    inputMint: string;
-    outputMint: string;
-    amount: string;
-    amountMode: AmountMode;
-    slippageBps: number;
-    platform: string;
-    userPublicKey?: string;
-  };
+  intentId: string;
+  actions: SIPAction[];
+  mode: "ATOMIC_BUNDLE" | "SINGLE";
   metadata: {
+    strategyGoal: string;
+    estimatedNetChange: any;
+    jitoTipLamports: number;
     reasoning: string;
-    requiresRiskScan: boolean;
-    sourceContext: string[];
     needsClarification: boolean;
+    sourceContext: string[];
     clarification?: ClarificationPayload;
   };
 }

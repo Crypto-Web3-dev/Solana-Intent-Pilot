@@ -3,15 +3,11 @@ import type { DetectedContextSnapshot } from "../shared/context";
 import type {
   ClarificationKind,
   ClarificationPayload,
-  SIPIntent
+  SIPIntent,
+  SIPAction
 } from "../shared/intent";
 
-type OpenAIResponseIntent = {
-  intent: SIPIntent["intent"];
-  confidence: number;
-  payload: SIPIntent["payload"];
-  metadata: SIPIntent["metadata"];
-};
+type OpenAIResponseIntent = SIPIntent;
 
 type ContextStrength = "weak" | "medium" | "strong";
 type MintEvidenceStrength = "weak" | "medium" | "strong";
@@ -229,29 +225,16 @@ export function normalizeIntentWithContext(
   context?: DetectedContextSnapshot,
   userInput = ""
 ): SIPIntent {
-  const contextStrength = getContextStrength(context);
-  const mintEvidenceStrength = getMintEvidenceStrength(context);
   const multipleTokenCandidates = hasMultipleTokenCandidates(context);
   const weakMintProvenance = hasOnlyWeakMintProvenance(context, userInput);
   const mintNeedsClarification =
     multipleTokenCandidates ||
-    (isContextDependentRequest(userInput) && mintEvidenceStrength === "weak") ||
+    (isContextDependentRequest(userInput) && getMintEvidenceStrength(context) === "weak") ||
     weakMintProvenance;
   const needsClarification =
     intent.metadata.needsClarification ||
     isUnderspecifiedRequest(userInput) ||
     mintNeedsClarification;
-
-  let confidence = intent.confidence;
-
-  if (needsClarification) {
-    confidence = Math.min(confidence, 0.49);
-  } else if (
-    isContextDependentRequest(userInput) &&
-    contextStrength !== "strong"
-  ) {
-    confidence = Math.min(confidence, 0.84);
-  }
 
   const clarification = needsClarification
     ? buildClarificationPayload(context, userInput)
@@ -259,7 +242,6 @@ export function normalizeIntentWithContext(
 
   return {
     ...intent,
-    confidence,
     metadata: {
       ...intent.metadata,
       needsClarification,
@@ -297,7 +279,7 @@ export function createOpenAIIntentParser(options?: {
           {
             role: "system",
             content:
-              "You convert user trading requests into a valid SIPIntent JSON object. Use page context as supporting evidence only. Do not invent missing fields. Return only valid JSON that matches the schema."
+              "You convert user trading requests into a valid SIPIntent JSON object. You can decompose complex requests into multiple actions (e.g., Swap then Stake). Use page context as supporting evidence only. Do not invent missing fields. Return only valid JSON that matches the schema."
           },
           {
             role: "user",
@@ -316,52 +298,49 @@ export function createOpenAIIntentParser(options?: {
             schema: {
               type: "object",
               additionalProperties: false,
-              required: ["intent", "confidence", "payload", "metadata"],
+              required: ["intentId", "actions", "mode", "metadata"],
               properties: {
-                intent: {
+                intentId: { type: "string" },
+                mode: {
                   type: "string",
-                  enum: ["SWAP", "LEND", "STAKE", "TRANSFER"]
+                  enum: ["ATOMIC_BUNDLE", "SINGLE"]
                 },
-                confidence: {
-                  type: "number",
-                  minimum: 0,
-                  maximum: 1
-                },
-                payload: {
-                  type: "object",
-                  additionalProperties: false,
-                  required: [
-                    "inputMint",
-                    "outputMint",
-                    "amount",
-                    "amountMode",
-                    "slippageBps",
-                    "platform"
-                  ],
-                  properties: {
-                    inputMint: { type: "string" },
-                    outputMint: { type: "string" },
-                    amount: { type: "string" },
-                    amountMode: {
-                      type: "string",
-                      enum: ["exact", "half", "all"]
-                    },
-                    slippageBps: { type: "number" },
-                    platform: { type: "string" }
+                actions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["id", "type", "payload", "status"],
+                    properties: {
+                      id: { type: "string" },
+                      type: {
+                        type: "string",
+                        enum: ["SWAP", "STAKE", "LEND", "TRANSFER"]
+                      },
+                      payload: { type: "object" },
+                      status: {
+                        type: "string",
+                        enum: ["pending", "ready", "failed"]
+                      }
+                    }
                   }
                 },
                 metadata: {
                   type: "object",
                   additionalProperties: false,
                   required: [
+                    "strategyGoal",
+                    "estimatedNetChange",
+                    "jitoTipLamports",
                     "reasoning",
-                    "requiresRiskScan",
                     "sourceContext",
                     "needsClarification"
                   ],
                   properties: {
+                    strategyGoal: { type: "string" },
+                    estimatedNetChange: { type: "object" },
+                    jitoTipLamports: { type: "number" },
                     reasoning: { type: "string" },
-                    requiresRiskScan: { type: "boolean" },
                     sourceContext: {
                       type: "array",
                       items: { type: "string" }
@@ -377,14 +356,8 @@ export function createOpenAIIntentParser(options?: {
 
       const content = response.output_text.trim();
       const parsed = JSON.parse(content) as OpenAIResponseIntent;
-      const intent: SIPIntent = {
-        intent: parsed.intent,
-        confidence: parsed.confidence,
-        payload: parsed.payload,
-        metadata: parsed.metadata
-      };
-
-      return normalizeIntentWithContext(intent, context, userInput);
+      
+      return normalizeIntentWithContext(parsed, context, userInput);
     }
   };
 }

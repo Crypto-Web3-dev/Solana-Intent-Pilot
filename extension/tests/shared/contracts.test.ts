@@ -8,19 +8,28 @@ import type { SecurityReport } from "../../src/shared/risk";
 describe("shared runtime contracts", () => {
   it("supports a valid SIP intent shape", () => {
     const intent: SIPIntent = {
-      intent: "SWAP",
-      confidence: 0.92,
-      payload: {
-        inputMint: "So11111111111111111111111111111111111111112",
-        outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-        amount: "1000000000",
-        amountMode: "exact",
-        slippageBps: 50,
-        platform: "Jupiter"
-      },
+      intentId: "req-1",
+      actions: [
+        {
+          id: "action-1",
+          type: "SWAP",
+          payload: {
+            inputMint: "So11111111111111111111111111111111111111112",
+            outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            amount: "1000000000",
+            amountMode: "exact",
+            slippageBps: 50,
+            platform: "Jupiter"
+          },
+          status: "pending"
+        }
+      ],
+      mode: "SINGLE",
       metadata: {
+        strategyGoal: "Swap to USDC",
+        estimatedNetChange: {},
+        jitoTipLamports: 0,
         reasoning: "Swap to USDC",
-        requiresRiskScan: true,
         sourceContext: ["page-token"],
         needsClarification: false,
         clarification: {
@@ -31,7 +40,7 @@ describe("shared runtime contracts", () => {
       }
     };
 
-    expect(intent.intent).toBe("SWAP");
+    expect(intent.actions[0].type).toBe("SWAP");
   });
 
   it("supports unknown risk level without creating a workflow phase", () => {

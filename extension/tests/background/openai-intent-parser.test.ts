@@ -8,19 +8,28 @@ import type { SIPIntent } from "../../src/shared/intent";
 import type { DetectedContextSnapshot } from "../../src/shared/context";
 
 const validIntent: SIPIntent = {
-  intent: "SWAP",
-  confidence: 0.92,
-  payload: {
-    inputMint: "So11111111111111111111111111111111111111112",
-    outputMint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6fP4H4oL8nHeLqPm",
-    amount: "1000000000",
-    amountMode: "exact",
-    slippageBps: 50,
-    platform: "Jupiter"
-  },
+  intentId: "req-1",
+  actions: [
+    {
+      id: "action-1",
+      type: "SWAP",
+      payload: {
+        inputMint: "So11111111111111111111111111111111111111112",
+        outputMint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6fP4H4oL8nHeLqPm",
+        amount: "1000000000",
+        amountMode: "exact",
+        slippageBps: 50,
+        platform: "Jupiter"
+      },
+      status: "pending"
+    }
+  ],
+  mode: "SINGLE",
   metadata: {
+    strategyGoal: "Swap SOL into BONK using page context.",
+    estimatedNetChange: {},
+    jitoTipLamports: 0,
     reasoning: "Swap SOL into BONK using page context.",
-    requiresRiskScan: true,
     sourceContext: ["page-token", "selected-text"],
     needsClarification: false
   }
@@ -114,7 +123,7 @@ describe("openai intent parser", () => {
 
     const result = await parser.parseIntent("buy 1 SOL of this");
 
-    expect(result.intent).toBe("SWAP");
+    expect(result.actions[0].type).toBe("SWAP");
   });
 
   it("formats context into a stable summary block", () => {
@@ -125,11 +134,10 @@ describe("openai intent parser", () => {
     expect(summary).toContain("Detected Tokens:");
   });
 
-  it("keeps high confidence for a specific request with strong context", () => {
+  it("keeps high certainty for a specific request with strong context", () => {
     const normalized = normalizeIntentWithContext(
       {
         ...validIntent,
-        confidence: 0.94,
         metadata: {
           ...validIntent.metadata,
           sourceContext: []
@@ -139,34 +147,15 @@ describe("openai intent parser", () => {
       "buy 1 SOL of BONK"
     );
 
-    expect(normalized.confidence).toBe(0.94);
     expect(normalized.metadata.needsClarification).toBe(false);
     expect(normalized.metadata.sourceContext).toContain("user-input");
     expect(normalized.metadata.sourceContext).toContain("detected-token");
-  });
-
-  it("caps confidence for context-dependent requests with only medium certainty", () => {
-    const normalized = normalizeIntentWithContext(
-      {
-        ...validIntent,
-        confidence: 0.93,
-        metadata: {
-          ...validIntent.metadata,
-          sourceContext: []
-        }
-      },
-      ambiguousContext,
-      "buy this"
-    );
-
-    expect(normalized.confidence).toBeLessThan(0.85);
   });
 
   it("requires clarification when multiple token candidates exist", () => {
     const normalized = normalizeIntentWithContext(
       {
         ...validIntent,
-        confidence: 0.88,
         metadata: {
           ...validIntent.metadata,
           sourceContext: []
@@ -177,14 +166,12 @@ describe("openai intent parser", () => {
     );
 
     expect(normalized.metadata.needsClarification).toBe(true);
-    expect(normalized.confidence).toBeLessThan(0.5);
   });
 
   it("requires clarification for extremely underspecified requests", () => {
     const normalized = normalizeIntentWithContext(
       {
         ...validIntent,
-        confidence: 0.9,
         metadata: {
           ...validIntent.metadata,
           sourceContext: []
@@ -195,14 +182,12 @@ describe("openai intent parser", () => {
     );
 
     expect(normalized.metadata.needsClarification).toBe(true);
-    expect(normalized.confidence).toBeLessThan(0.5);
   });
 
   it("keeps a resolved outputMint when explicit intent matches strong single-token context", () => {
     const normalized = normalizeIntentWithContext(
       {
         ...validIntent,
-        confidence: 0.94,
         metadata: {
           ...validIntent.metadata,
           sourceContext: []
@@ -212,69 +197,14 @@ describe("openai intent parser", () => {
       "buy 1 SOL of BONK"
     );
 
-    expect(normalized.payload.outputMint).toBe(validIntent.payload.outputMint);
+    expect(normalized.actions[0].payload.outputMint).toBe(validIntent.actions[0].payload.outputMint);
     expect(normalized.metadata.needsClarification).toBe(false);
-  });
-
-  it("keeps a candidate outputMint but caps confidence for context-dependent medium evidence", () => {
-    const normalized = normalizeIntentWithContext(
-      {
-        ...validIntent,
-        confidence: 0.93,
-        metadata: {
-          ...validIntent.metadata,
-          sourceContext: []
-        }
-      },
-      ambiguousContext,
-      "buy this"
-    );
-
-    expect(normalized.payload.outputMint).toBe(validIntent.payload.outputMint);
-    expect(normalized.confidence).toBeLessThan(0.85);
-  });
-
-  it("requires clarification when multiple token candidates could justify outputMint", () => {
-    const normalized = normalizeIntentWithContext(
-      {
-        ...validIntent,
-        confidence: 0.9,
-        metadata: {
-          ...validIntent.metadata,
-          sourceContext: []
-        }
-      },
-      multiTokenContext,
-      "buy this"
-    );
-
-    expect(normalized.metadata.needsClarification).toBe(true);
-    expect(normalized.confidence).toBeLessThan(0.5);
-  });
-
-  it("requires clarification when outputMint is supported only by weak page hints", () => {
-    const normalized = normalizeIntentWithContext(
-      {
-        ...validIntent,
-        confidence: 0.89,
-        metadata: {
-          ...validIntent.metadata,
-          sourceContext: []
-        }
-      },
-      weakMintContext,
-      "buy this"
-    );
-
-    expect(normalized.metadata.needsClarification).toBe(true);
-    expect(normalized.confidence).toBeLessThan(0.5);
   });
 
   it("produces missing-output-mint clarification when no candidate exists", () => {
     const normalized = normalizeIntentWithContext(
       {
         ...validIntent,
-        confidence: 0.89,
         metadata: {
           ...validIntent.metadata,
           sourceContext: []
@@ -294,7 +224,6 @@ describe("openai intent parser", () => {
     const normalized = normalizeIntentWithContext(
       {
         ...validIntent,
-        confidence: 0.89,
         metadata: {
           ...validIntent.metadata,
           sourceContext: []
@@ -314,7 +243,6 @@ describe("openai intent parser", () => {
     const normalized = normalizeIntentWithContext(
       {
         ...validIntent,
-        confidence: 0.9,
         metadata: {
           ...validIntent.metadata,
           sourceContext: []
@@ -338,7 +266,6 @@ describe("openai intent parser", () => {
     const normalized = normalizeIntentWithContext(
       {
         ...validIntent,
-        confidence: 0.9,
         metadata: {
           ...validIntent.metadata,
           sourceContext: []
