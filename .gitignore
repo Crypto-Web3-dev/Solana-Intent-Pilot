@@ -1,4 +1,6 @@
 .pnpm-store/
+.worktrees/
+worktrees/
 
 extension/node_modules/
 extension/build/
