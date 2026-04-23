@@ -1,4 +1,4 @@
-import type { SIPIntent } from "../shared/intent";
+import type { SIPAction } from "../shared/intent";
 
 export interface QuoteResult {
   routeLabel: string;
@@ -10,13 +10,13 @@ export interface QuoteResult {
 }
 
 export interface QuoteAdapter {
-  getOrder(intent: SIPIntent): Promise<{ quote: any; swapTransaction: string }>;
+  getOrder(action: SIPAction): Promise<{ quote: any; swapTransaction: string }>;
   executeSwap(requestId: string, signedTransaction: string): Promise<any>;
 }
 
 export function createMockQuoteAdapter(): QuoteAdapter {
   return {
-    async getOrder(intent: SIPIntent) {
+    async getOrder(action: SIPAction) {
       return { quote: {}, swapTransaction: "mock-tx" };
     },
     async executeSwap() {
@@ -73,17 +73,17 @@ export function createJupiterQuoteAdapter(options?: {
   };
 
   return {
-    async getOrder(intent: SIPIntent) {
+    async getOrder(action: SIPAction) {
       const url = new URL(`${baseUrl}/order`);
       url.searchParams.append("swapMode", "ExactIn");
-      url.searchParams.append("slippageBps", String(intent.payload.slippageBps || 50));
-      url.searchParams.append("inputMint", intent.payload.inputMint);
-      url.searchParams.append("outputMint", intent.payload.outputMint);
-      url.searchParams.append("amount", intent.payload.amount);
+      url.searchParams.append("slippageBps", String(action.payload.slippageBps || 50));
+      url.searchParams.append("inputMint", action.payload.inputMint);
+      url.searchParams.append("outputMint", action.payload.outputMint);
+      url.searchParams.append("amount", action.payload.amount);
       
       // 恢复动态获取 taker 地址
-      if (intent.payload.userPublicKey) {
-        url.searchParams.append("taker", intent.payload.userPublicKey);
+      if (action.payload.userPublicKey) {
+        url.searchParams.append("taker", action.payload.userPublicKey);
       }
 
       const response = await proxiedFetch(url.toString(), {
@@ -127,12 +127,12 @@ export function createDefaultQuoteAdapter(options?: {
   const fallbackAdapter = options?.fallbackAdapter;
 
   return {
-    async getOrder(intent: SIPIntent) {
+    async getOrder(action: SIPAction) {
         try {
-          return await liveAdapter.getOrder(intent);
+          return await liveAdapter.getOrder(action);
         } catch (error) {
           if (fallbackAdapter) {
-            return fallbackAdapter.getOrder(intent);
+            return fallbackAdapter.getOrder(action);
           }
           throw error;
         }
@@ -148,3 +148,4 @@ export function createDefaultQuoteAdapter(options?: {
     }
   };
 }
+

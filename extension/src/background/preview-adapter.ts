@@ -7,28 +7,12 @@ import { createDefaultSimulationAdapter } from "./simulation-adapter";
 import { mockExecutionPreview } from "./mock-services";
 
 export interface PreviewAdapter {
-  buildPreview(requestId: string, intent?: SIPIntent): Promise<ExecutionPreview>;
+  buildPreview(requestId: string, intent: SIPIntent, transactions?: string[]): Promise<ExecutionPreview>;
 }
 
 export function createMockPreviewAdapter(): PreviewAdapter {
   return {
     buildPreview: mockExecutionPreview
-  };
-}
-
-async function combinePreview(
-  requestId: string,
-  quote: QuoteResult,
-  simulation: SimulationResult
-): Promise<ExecutionPreview> {
-  return {
-    requestId,
-    routeLabel: quote.routeLabel,
-    inputAmount: quote.inputAmount,
-    outputAmount: quote.outputAmount,
-    slippageBps: quote.slippageBps,
-    estimatedFeeLamports: quote.estimatedFeeLamports,
-    simulationSummary: simulation.simulationSummary
   };
 }
 
@@ -41,18 +25,32 @@ export function createPolicyPreviewAdapter(options?: {
     options?.simulationAdapter ?? createDefaultSimulationAdapter();
 
   return {
-    async buildPreview(requestId: string, intent?: SIPIntent): Promise<ExecutionPreview> {
-      if (!intent) {
-        throw new Error("Intent is required to build a preview");
+    async buildPreview(requestId: string, intent: SIPIntent, transactions?: string[]): Promise<ExecutionPreview> {
+      // 如果提供了交易束，则进行束预览
+      if (transactions && transactions.length > 0) {
+        const simulation = await simulationAdapter.simulate(intent, transactions[0]); // TODO: Update simulation adapter for bundles
+
+        return {
+          requestId,
+          routeLabel: "Bundle",
+          inputAmount: "multi",
+          outputAmount: "multi",
+          slippageBps: 0,
+          estimatedFeeLamports: "0",
+          simulationSummary: simulation.simulationSummary,
+          bundleTransactions: transactions
+        };
       }
 
-      // 1. 获取报价和交易载荷
-      const { quote, swapTransaction } = await quoteAdapter.getOrder(intent);
-      
-      // 2. 使用真实的交易载荷进行模拟
+      // 回退到单动作流程（向后兼容）
+      if (!intent.actions || intent.actions.length === 0) {
+        throw new Error("No actions to preview");
+      }
+
+      const action = intent.actions[0];
+      const { quote, swapTransaction } = await quoteAdapter.getOrder(action);
       const simulation = await simulationAdapter.simulate(intent, swapTransaction);
 
-      // 计算手续费总和
       const totalFee = (Number(quote.signatureFeeLamports || 0) + Number(quote.prioritizationFeeLamports || 0)).toString();
 
       return {
@@ -60,11 +58,12 @@ export function createPolicyPreviewAdapter(options?: {
         routeLabel: "Jupiter",
         inputAmount: quote.inAmount,
         outputAmount: quote.outAmount,
-        slippageBps: intent.payload.slippageBps,
+        slippageBps: action.payload.slippageBps,
         estimatedFeeLamports: totalFee,
         simulationSummary: simulation.simulationSummary,
-        swapTransaction // 存储交易载荷供后续签名使用
+        swapTransaction
       };
     }
   };
 }
+

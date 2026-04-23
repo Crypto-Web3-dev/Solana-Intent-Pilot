@@ -2,10 +2,13 @@ import type { SIPIntent } from "../shared/intent";
 import type { SecurityReport } from "../shared/risk";
 import type { WorkflowPhase, WorkflowReason } from "../shared/workflow";
 
+type ActionStatus = "pending" | "ready" | "failed";
+
 type WorkflowState = {
   requestId: string;
   phase: WorkflowPhase;
   reason?: WorkflowReason;
+  actionStates?: Record<string, ActionStatus>;
 };
 
 export function isTerminalPhase(phase: WorkflowPhase) {
@@ -22,9 +25,16 @@ export function createWorkflowEngine() {
   function setState(
     requestId: string,
     phase: WorkflowPhase,
-    reason?: WorkflowReason
+    reason?: WorkflowReason,
+    actionStates?: Record<string, ActionStatus>
   ) {
-    states.set(requestId, { requestId, phase, reason });
+    const currentState = states.get(requestId);
+    states.set(requestId, {
+      requestId,
+      phase,
+      reason,
+      actionStates: actionStates ?? currentState?.actionStates
+    });
   }
 
   function currentPhase(requestId: string) {
@@ -113,7 +123,8 @@ export function createWorkflowEngine() {
         return;
       }
 
-      if (intent.intent !== "SWAP") {
+      // 验证是否有动作
+      if (!intent.actions || intent.actions.length === 0) {
         setState(requestId, "idle", "intent-invalid");
         return;
       }
@@ -123,9 +134,17 @@ export function createWorkflowEngine() {
         return;
       }
 
+      // 初始化动作状态
+      const actionStates: Record<string, ActionStatus> = {};
+      intent.actions.forEach((action) => {
+        actionStates[action.id] = "pending";
+      });
+
       setState(
         requestId,
-        intent.metadata.requiresRiskScan ? "risk-checking" : "quoting"
+        intent.metadata.requiresRiskScan ? "risk-checking" : "quoting",
+        undefined,
+        actionStates
       );
     },
     handleRiskReport(requestId: string, report: SecurityReport) {
@@ -139,6 +158,28 @@ export function createWorkflowEngine() {
       }
 
       setState(requestId, "quoting");
+    },
+    handleActionReady(requestId: string, actionId: string) {
+      const state = states.get(requestId);
+      if (!state || !state.actionStates) return;
+
+      const newActionStates = { ...state.actionStates, [actionId]: "ready" as const };
+      
+      // 检查是否所有动作都已就绪
+      const allReady = Object.values(newActionStates).every((s) => s === "ready");
+
+      if (allReady && state.phase === "quoting") {
+        setState(requestId, "simulating", undefined, newActionStates);
+      } else {
+        setState(requestId, state.phase, state.reason, newActionStates);
+      }
+    },
+    handleActionFailed(requestId: string, actionId: string) {
+      const state = states.get(requestId);
+      if (!state || !state.actionStates) return;
+
+      const newActionStates = { ...state.actionStates, [actionId]: "failed" as const };
+      setState(requestId, "failed", "quote-failed", newActionStates);
     },
     handleQuoteReady(requestId: string) {
       if (currentPhase(requestId) !== "quoting") {
