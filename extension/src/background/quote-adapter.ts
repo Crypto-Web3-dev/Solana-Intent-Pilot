@@ -35,7 +35,7 @@ export function createJupiterQuoteAdapter(options?: {
   apiKey?: string;
 }): QuoteAdapter {
   const baseUrl = options?.baseUrl ?? "https://api.jup.ag/swap/v2";
-  const apiKey = options?.apiKey ?? process.env.PLASMO_PUBLIC_JUPITER_API_KEY;
+  const apiKey = options?.apiKey ?? process.env.PLASMO_PUBLIC_JUPITER_API_KEY ?? process.env.JUPITER_API_KEY;
   const fetchImpl = options?.fetchImpl;
 
   const proxiedFetch = async (url: string, options?: any) => {

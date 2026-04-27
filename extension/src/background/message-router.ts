@@ -100,7 +100,7 @@ export function createMessageRouter(
       };
 
       try {
-        intent = await services.parseIntent(userInput, contextSnapshot);
+        intent = await services.parseIntent(userInput, contextSnapshot, userPublicKey);
         checkCancelled();
 
         if (userPublicKey) {
