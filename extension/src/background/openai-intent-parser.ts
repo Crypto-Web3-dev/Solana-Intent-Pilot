@@ -21,7 +21,7 @@ function createClient(apiKey: string) {
   });
 }
 
-export function formatContextForPrompt(context?: DetectedContextSnapshot) {     
+export function formatContextForPrompt(context?: DetectedContextSnapshot) {
   if (!context) {
     return "No page context was available.";
   }
@@ -48,7 +48,7 @@ export function formatContextForPrompt(context?: DetectedContextSnapshot) {
   ].join("\n");
 }
 
-function hasMultipleTokenCandidates(context?: DetectedContextSnapshot) {        
+function hasMultipleTokenCandidates(context?: DetectedContextSnapshot) {
   return (context?.detectedTokens.length ?? 0) > 1;
 }
 
@@ -57,7 +57,7 @@ function hasExplicitTokenMention(userInput: string) {
   if (normalized.includes("this") || normalized.includes("that")) {
     return false;
   }
-  const keywords = ["buy", "swap", "trade", "sell", "of", "to", "for", "with"]; 
+  const keywords = ["buy", "swap", "trade", "sell", "of", "to", "for", "with"];
   const words = normalized.split(/\s+/);
   return words.some(w => !keywords.includes(w) && (/\$[a-z0-9]+|\b[a-z0-9]{3,}\b/i.test(w)));
 }
@@ -111,7 +111,7 @@ function buildClarificationPayload(
     };
   }
 
-  if (isGeneric || (!hasExplicitTokenMention(userInput) && hasTokens)) {        
+  if (isGeneric || (!hasExplicitTokenMention(userInput) && hasTokens)) {
       return {
           kind: "underspecified-request",
           message: buildClarificationMessage("underspecified-request")
@@ -179,7 +179,7 @@ function buildSourceContext(context?: DetectedContextSnapshot) {
   if (!context) return sourceContext;
   if (context.url) sourceContext.push("page-url");
   if (context.selectedText) sourceContext.push("selected-text");
-  if (context.detectedTokens.length > 0) sourceContext.push("detected-token");  
+  if (context.detectedTokens.length > 0) sourceContext.push("detected-token");
   return sourceContext;
 }
 
@@ -300,7 +300,7 @@ async function searchJupiterTokens(query: string): Promise<any[]> {
   }
 }
 
-async function getJupiterTokenMetadata(key: string): Promise<any | null> {      
+async function getJupiterTokenMetadata(key: string): Promise<any | null> {
   const normalizedKey = key.toUpperCase();
   const jupiterApiKey = process.env.PLASMO_PUBLIC_JUPITER_API_KEY;
 
@@ -336,7 +336,7 @@ async function getJupiterTokenMetadata(key: string): Promise<any | null> {
         const metadata = {
           address: address,
           symbol: found.symbol || key,
-          decimals: typeof found.decimals === 'number' ? found.decimals : 9   
+          decimals: typeof found.decimals === 'number' ? found.decimals : 9
         };
 
         rememberTokenMetadata(metadata);
@@ -378,7 +378,7 @@ async function resolveToken(
       icon: found.icon
     };
   }
-  
+
   if (MINT_MAP[normalized]) {
     const mint = MINT_MAP[normalized];
     return { mint, decimals: DECIMALS_MAP[mint] ?? 9, symbol: normalized };
@@ -400,7 +400,7 @@ async function resolveToken(
   }
 
   const official = await getJupiterTokenMetadata(symbolOrMint);
-  if (official) return { mint: official.address, decimals: official.decimals, symbol: official.symbol }; 
+  if (official) return { mint: official.address, decimals: official.decimals, symbol: official.symbol };
   return { mint: "", decimals: 9, symbol: normalized };
 }
 
@@ -443,7 +443,7 @@ function toAtomicAmount(amount: string | number, mint: string, decimals?: number
   return Math.floor(val * Math.pow(10, finalDecimals)).toString();
 }
 
-async function mapToSIPIntent(raw: any, context?: DetectedContextSnapshot, userInput = ""): Promise<SIPIntent> {
+async function mapToSIPIntent(raw: any, context?: DetectedContextSnapshot, userInput = "", userPublicKey?: string): Promise<SIPIntent> {
     const buyTokenRaw = String(raw.token || raw.buyToken || raw.outputMint || "USDC");
     const spendTokenRaw = String(raw.amountUnit || raw.inputToken || raw.spendToken || "SOL");
     const rawAmount = raw.amount || "0";
@@ -458,7 +458,6 @@ async function mapToSIPIntent(raw: any, context?: DetectedContextSnapshot, userI
     );
     const needsContextClarification = resolvedBuyTokenRaw === null;
 
-    // 核心改进：先解析代币，再动态生成目标和推理
     const [input, output] = await Promise.all([
         resolveToken(spendTokenRaw, context),
         resolveToken(resolvedBuyTokenRaw ?? "USDC", context)
@@ -494,7 +493,7 @@ async function mapToSIPIntent(raw: any, context?: DetectedContextSnapshot, userI
                 ? ambiguousOutputCandidateLabels.length > 0
                   ? `SIP found multiple verified matches for ${output.symbol}. Please confirm the intended token by name and mint address.`
                   : `SIP could not uniquely verify the token symbol ${output.symbol}. Please provide a more specific token name or mint address.`
-                : isSameToken 
+                : isSameToken
                 ? `You requested to swap ${input.symbol} for itself, which is not a valid transaction. Please select a different target token.`
                 : rawSwapMode === "ExactOut"
                 ? `Executing a decentralized exchange swap. Receiving ${rawAmount || "the requested amount"} ${output.symbol} by spending ${input.symbol} based on your input command.`
@@ -541,7 +540,8 @@ async function mapToSIPIntent(raw: any, context?: DetectedContextSnapshot, userI
             outputTokenVerificationSource: output.verificationSource,
             outputTokenIcon: output.icon,
             inputDecimals: input.decimals,
-            outputDecimals: output.decimals
+            outputDecimals: output.decimals,
+            userPublicKey: userPublicKey
         }
     });
 
@@ -569,7 +569,7 @@ export function normalizeIntentWithContext(
       (token) => token.verified && token.mint === resolvedMint
     )
   );
-  const hasStrongEvidence = !isSOL && resolvedMint && resolvedMint.length > 30; 
+  const hasStrongEvidence = !isSOL && resolvedMint && resolvedMint.length > 30;
 
   const normalizedInput = userInput.trim().toLowerCase();
   const isGeneric = normalizedInput === "buy" || normalizedInput === "swap" || normalizedInput === "trade" || normalizedInput === "buy this" || normalizedInput === "swap this";
@@ -603,7 +603,7 @@ export function createOpenAIIntentParser(options?: {
   model?: string;
   client?: OpenAI;
 }) {
-  const apiKey = options?.apiKey ?? process.env.PLASMO_PUBLIC_NVIDIA_API_KEY;   
+  const apiKey = options?.apiKey ?? process.env.PLASMO_PUBLIC_NVIDIA_API_KEY;
   const model = options?.model ?? "z-ai/glm-5.1";
 
   const client = options?.client ?? new OpenAI({
@@ -615,7 +615,8 @@ export function createOpenAIIntentParser(options?: {
   return {
     async parseIntent(
       userInput: string,
-      context?: DetectedContextSnapshot
+      context?: DetectedContextSnapshot,
+      userPublicKey?: string
     ): Promise<SIPIntent> {
       if (userInputUsesContextReference(userInput)) {
         return createContextTokenConfirmationIntent(userInput, context);
@@ -636,8 +637,8 @@ export function createOpenAIIntentParser(options?: {
         Constraint: In a SWAP, the input token (amountUnit) and output token (token) MUST NOT be the same.
         Include swapMode as either "ExactIn" or "ExactOut".
         Rules for amountUnit:
-        - If user says "buy 100 JUP", set token: "JUP", amount: 100, amountUnit: "JUP".      
-        - If user says "buy 10 SOL of JUP", set token: "JUP", amount: 10, amountUnit: "SOL". 
+        - If user says "buy 100 JUP", set token: "JUP", amount: 100, amountUnit: "JUP".
+        - If user says "buy 10 SOL of JUP", set token: "JUP", amount: 10, amountUnit: "SOL".
         - If user says "swap 10 SOL to USDC", set token: "USDC", amount: 10, amountUnit: "SOL", swapMode: "ExactIn".
         - If user says "buy 100 USD1 with SOL", set token: "USD1", amount: 100, amountUnit: "SOL", swapMode: "ExactOut".
         - If user says "receive 100 USD1 with SOL", set token: "USD1", amount: 100, amountUnit: "SOL", swapMode: "ExactOut".`
@@ -662,7 +663,7 @@ export function createOpenAIIntentParser(options?: {
         if (!jsonStr) jsonStr = fullContent.replace(/```[a-z]*|```/gi, "").trim();
 
         const parsed = JSON.parse(jsonStr);
-        const mapped = await mapToSIPIntent(parsed, context, userInput);
+        const mapped = await mapToSIPIntent(parsed, context, userInput, userPublicKey);
         return normalizeIntentWithContext(mapped, context, userInput);
       } catch (e) {
         console.error("[AI] Failed to parse JSON. Raw:", fullContent);
