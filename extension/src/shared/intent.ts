@@ -1,5 +1,54 @@
-export type IntentType = "SWAP" | "LEND" | "STAKE" | "TRANSFER";
-export type AmountMode = "exact" | "half" | "all";
+export type IntentMode = "SINGLE" | "ATOMIC_BUNDLE" | "PARALLEL";
+
+export interface SIPAction {
+  id: string;
+  type: "SWAP" | "STAKE" | "LEND" | "TRANSFER";
+  status: "pending" | "ready" | "failed";
+  payload: {
+    inputMint?: string;
+    outputMint?: string;
+    amount?: string;
+    amountMode?: "exact" | "percentage";
+    swapMode?: "ExactIn" | "ExactOut";
+    slippageBps?: number;
+    platform?: string;
+    userPublicKey?: string;
+    recipient?: string;
+    mint?: string;
+    inputSymbol?: string;
+    outputSymbol?: string;
+    outputTokenName?: string;
+    outputTokenVerified?: boolean;
+    outputTokenVerificationSource?: "jupiter" | "solscan";
+    outputTokenIcon?: string;
+    symbol?: string;
+    inputDecimals?: number;
+    outputDecimals?: number;
+    decimals?: number;
+  };
+}
+
+export interface SIPIntent {
+  intentId: string;
+  mode: IntentMode;
+  actions: SIPAction[];
+  metadata: {
+    strategyGoal: string;
+    reasoning: string;
+    jitoTipLamports: number;
+    requiresRiskScan: boolean;
+    sourceContext: string[];
+    needsClarification: boolean;
+    clarification?: ClarificationPayload;
+    riskContext?: {
+      mintAuthority?: string | null;
+      freezeAuthority?: string | null;
+      isJupVerified?: boolean;
+      liquidityUsd?: number;
+      tokenCreatedAt?: number;
+    };
+  };
+}
 
 export type ClarificationKind =
   | "missing-output-mint"
@@ -11,26 +60,4 @@ export interface ClarificationPayload {
   kind: ClarificationKind;
   message: string;
   candidateSymbols?: string[];
-}
-
-export interface SIPAction {
-  id: string;
-  type: "SWAP" | "STAKE" | "LEND" | "TRANSFER";
-  payload: any;
-  status: "pending" | "ready" | "failed";
-}
-
-export interface SIPIntent {
-  intentId: string;
-  actions: SIPAction[];
-  mode: "ATOMIC_BUNDLE" | "SINGLE";
-  metadata: {
-    strategyGoal: string;
-    estimatedNetChange: any;
-    jitoTipLamports: number;
-    reasoning: string;
-    needsClarification: boolean;
-    sourceContext: string[];
-    clarification?: ClarificationPayload;
-  };
 }

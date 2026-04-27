@@ -30,6 +30,7 @@ describe("shared runtime contracts", () => {
         estimatedNetChange: {},
         jitoTipLamports: 0,
         reasoning: "Swap to USDC",
+        requiresRiskScan: true,
         sourceContext: ["page-token"],
         needsClarification: false,
         clarification: {
@@ -41,6 +42,33 @@ describe("shared runtime contracts", () => {
     };
 
     expect(intent.actions[0].type).toBe("SWAP");
+    expect(intent.metadata.requiresRiskScan).toBe(true);
+  });
+
+  it("supports SIPIntent with riskContext", () => {
+    const intent: SIPIntent = {
+      intentId: "req-1",
+      actions: [],
+      mode: "SINGLE",
+      metadata: {
+        strategyGoal: "Goal",
+        reasoning: "Reason",
+        jitoTipLamports: 0,
+        requiresRiskScan: true,
+        sourceContext: [],
+        needsClarification: false,
+        riskContext: {
+          isJupVerified: true,
+          liquidityUsd: 1000000,
+          mintAuthority: "auth-pubkey",
+          freezeAuthority: null
+        }
+      }
+    };
+    expect(intent.metadata.riskContext?.isJupVerified).toBe(true);
+    expect(intent.metadata.riskContext?.liquidityUsd).toBe(1000000);
+    expect(intent.metadata.riskContext?.mintAuthority).toBe("auth-pubkey");
+    expect(intent.metadata.riskContext?.freezeAuthority).toBe(null);
   });
 
   it("supports unknown risk level without creating a workflow phase", () => {
@@ -63,10 +91,11 @@ describe("shared runtime contracts", () => {
       inputAmount: "1 SOL",
       outputAmount: "100 USDC",
       slippageBps: 50,
-      estimatedFeeLamports: "5000"
+      estimatedFeeLamports: "5000",
+      bundleTransactions: ["tx-1", "tx-2"]
     };
 
-    expect(preview.requestId).toBe("req-1");
+    expect(preview.bundleTransactions).toHaveLength(2);
   });
 
   it("supports workflow state changed messages", () => {
