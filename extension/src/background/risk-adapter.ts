@@ -166,11 +166,17 @@ async function resolveWasmRiskEngine(
 }
 
 async function fetchTokenSecurity(mint: string) {
-  const HELIUS_KEY = process.env.HELIUS_API_KEY;
-  const JUP_KEY = process.env.JUPITER_API_KEY;
+  // Use PLASMO_PUBLIC_ prefix as required by Plasmo for environment variables
+  const HELIUS_KEY = process.env.PLASMO_PUBLIC_HELIUS_API_KEY || process.env.HELIUS_API_KEY;
+  const JUP_KEY = process.env.PLASMO_PUBLIC_JUPITER_API_KEY || process.env.JUPITER_API_KEY;
+
+  if (!HELIUS_KEY) {
+    console.warn("[Risk Adapter] HELIUS_API_KEY is missing, skipping live security check.");
+    return null;
+  }
 
   try {
-    // 1. Fetch Authority via Helius (getAccountInfo/getAsset)
+    // 1. Fetch Authority via Helius
     const heliusUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
     const accountResponse = await fetch(heliusUrl, {
       method: "POST",
@@ -182,23 +188,28 @@ async function fetchTokenSecurity(mint: string) {
         params: [mint, { encoding: "jsonParsed" }]
       })
     });
+    
+    if (!accountResponse.ok) {
+      throw new Error(`Helius RPC returned ${accountResponse.status}`);
+    }
+
     const accountData = await accountResponse.json();
     const parsedData = accountData.result?.value?.data?.parsed?.info;
 
     // 2. Fetch Verification Status via Jupiter
-    // We check against Jupiter's strict list or verified tokens
     const jupUrl = `https://api.jup.ag/api/v1/token/${mint}`;
-    const jupResponse = await fetch(jupUrl, {
-      headers: { "x-api-key": JUP_KEY || "" }
-    });
+    const headers: Record<string, string> = {};
+    if (JUP_KEY) {
+      headers["x-api-key"] = JUP_KEY;
+    }
+
+    const jupResponse = await fetch(jupUrl, { headers });
     const jupData = jupResponse.ok ? await jupResponse.json() : null;
 
     return {
       mintAuthority: parsedData?.mintAuthority || null,
       freezeAuthority: parsedData?.freezeAuthority || null,
       isJupVerified: !!jupData && jupData.tags?.includes("verified"),
-      // For liquidity, we'd ideally fetch from Birdeye, but for now we'll 
-      // use a heuristic or set a default if verified.
       liquidityUsd: jupData ? 1000000 : 0 
     };
   } catch (err) {
