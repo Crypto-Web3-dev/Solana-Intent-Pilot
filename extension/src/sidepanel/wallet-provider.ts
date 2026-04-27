@@ -30,9 +30,11 @@ export function createMockWalletProvider(): WalletProvider {
     async submitTransaction(
       requestId: string
     ): Promise<WalletSubmissionResult> {
+      const signature = `dev-wallet-${requestId}`;
+
       return {
-        signature: `mock-signature-${requestId}`,
-        explorerUrl: `https://explorer.solana.com/tx/mock-signature-${requestId}`
+        signature,
+        explorerUrl: `https://explorer.solana.com/tx/${signature}`
       };
     }
   };
@@ -84,5 +86,11 @@ export function createWindowSolanaWalletProvider(): WalletProvider | null {
 }
 
 export function createDefaultWalletProvider(): WalletProvider {
-  return createWindowSolanaWalletProvider() ?? createMockWalletProvider();
+  const walletProvider = createWindowSolanaWalletProvider();
+
+  if (!walletProvider) {
+    throw new Error("Wallet provider not available");
+  }
+
+  return walletProvider;
 }

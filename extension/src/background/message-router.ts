@@ -2,6 +2,7 @@ import { createWorkflowEngine } from "./workflow-engine";
 import { createMockRuntimeServices } from "./runtime-services";
 import type { SIPIntent } from "../shared/intent";
 import type {
+  ExecutionCancelRequestedMessage,
   ExecutionCancelledMessage,
   ExecutionConfirmedMessage,
   ExecutionPreviewFailedMessage,
@@ -22,7 +23,7 @@ import type { WorkflowPhase, WorkflowReason } from "../shared/workflow";
 type WorkflowStateSnapshot = {
   requestId: string;
   phase: WorkflowPhase;
-  reason?: WorkflowReason;
+  reason?: WorkflowReason | string;
 };
 
 type WorkflowEngine = ReturnType<typeof createWorkflowEngine>;
@@ -43,138 +44,230 @@ function createStateChangedMessage(
 
 export function createMessageRouter(
   engine: WorkflowEngine = createWorkflowEngine(),
-  services: RuntimeServices = createMockRuntimeServices()
+  services: RuntimeServices = createMockRuntimeServices(),
+  onEvent?: (event: SIPRuntimeMessage) => void
 ) {
   const lastIntentByRequestId = new Map<string, SIPIntent>();
   const lastPreviewByRequestId = new Map<string, ExecutionPreviewReadyMessage["payload"]>();
+  const cancelledRequestIds = new Set<string>();
 
-  function pushState(events: SIPRuntimeMessage[], requestId: string) {
-    events.push(createStateChangedMessage(requestId, engine.getState(requestId)));
+  function pushState(requestId: string) {
+    const state = engine.getState(requestId);
+    const event = createStateChangedMessage(requestId, state);
+    onEvent?.(event);
   }
 
   function releaseState(requestId: string) {
     engine.clearState(requestId);
+    cancelledRequestIds.delete(requestId);
+  }
+
+  function isCancelled(requestId: string) {
+    return cancelledRequestIds.has(requestId);
   }
 
   return {
+    handleCancelRequested(message: ExecutionCancelRequestedMessage): SIPRuntimeMessage[] {
+        const { requestId } = message.payload;
+        cancelledRequestIds.add(requestId);
+        engine.handleExecutionCancelled(requestId);
+        
+        pushState(requestId);
+        releaseState(requestId);
+        return []; // 核心优化：改用推送机制，不再通过返回值传递事件
+    },
+
+    handleRetryRequested(message: { payload: { requestId: string } }): SIPRuntimeMessage[] {
+        const { requestId } = message.payload;
+        engine.handleRetrySignature(requestId);
+        pushState(requestId);
+        return [];
+    },
+
     async handleIntentRequest(
       message: IntentParseRequestedMessage
     ): Promise<SIPRuntimeMessage[]> {
       const { requestId, userInput, contextSnapshot, userPublicKey } = message.payload;
-      const events: SIPRuntimeMessage[] = [];
       let intent: SIPIntent;
 
       engine.start(requestId);
-      pushState(events, requestId);
+      pushState(requestId);
+
+      const checkCancelled = () => {
+          if (isCancelled(requestId)) {
+              throw new Error("OPERATION_ABORTED");
+          }
+      };
 
       try {
         intent = await services.parseIntent(userInput, contextSnapshot);
-        // 如果消息中携带了公钥，则将其存入意图载荷中
+        checkCancelled();
+
         if (userPublicKey) {
-          intent.payload.userPublicKey = userPublicKey;
+          intent.actions?.forEach((a) => {
+            if (a.payload) {
+                a.payload.userPublicKey = userPublicKey;
+            }
+          });
         }
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : "Intent parse failed";
+      } catch (error: any) {
+        if (error.message === "OPERATION_ABORTED") return [];
+        
+        let reason = error instanceof Error ? error.message : "Intent parse failed";
+        if (reason.includes("Jito")) {
+            reason = "Service provider error during token resolution. Please retry.";
+        }
 
-        events.push({
-          type: "intent.parse.failed",
-          payload: {
-            requestId,
-            reason,
-            recoverable: false
-          }
-        } satisfies IntentParseFailedMessage);
         engine.handleFailure(requestId, "intent-invalid");
-        pushState(events, requestId);
-        releaseState(requestId);
+        const failedEvent: IntentParseFailedMessage = {
+          type: "intent.parse.failed",
+          payload: { requestId, reason, recoverable: false }
+        };
+        onEvent?.(failedEvent);
 
-        return events;
+        pushState(requestId);
+        releaseState(requestId);
+        return [];
       }
 
-      events.push({
+      const succeededEvent: IntentParseSucceededMessage = {
         type: "intent.parse.succeeded",
-        payload: {
-          requestId,
-          intent
-        }
-      } satisfies IntentParseSucceededMessage);
+        payload: { requestId, intent }
+      };
+      onEvent?.(succeededEvent);
+
       lastIntentByRequestId.set(requestId, intent);
-
       engine.handleParsedIntent(requestId, intent);
-      pushState(events, requestId);
+      pushState(requestId);
 
-      if (engine.getState(requestId)?.phase === "idle") {
+      const stateAfterParse = engine.getState(requestId);
+      if (stateAfterParse?.phase === "idle") {
         releaseState(requestId);
-        return events;
+        return [];
       }
 
-      if (engine.getState(requestId)?.phase === "risk-checking") {
-        events.push({
+      if (stateAfterParse?.phase === "risk-checking") {
+        const riskRequestedEvent: RiskScanRequestedMessage = {
           type: "risk.scan.requested",
           payload: {
             requestId,
-            mintAddress: intent.payload.outputMint,
-            sourceIntent: intent.payload
+            mintAddress: intent.actions[0]?.payload?.outputMint || "",
+            sourceAction: intent.actions[0]
           }
-        } satisfies RiskScanRequestedMessage);
+        };
+        onEvent?.(riskRequestedEvent);
 
         try {
           const report = await services.scanRisk(intent);
-          events.push({
+          checkCancelled();
+
+          const riskCompletedEvent: RiskScanCompletedMessage = {
             type: "risk.scan.completed",
-            payload: {
-              requestId,
-              report
-            }
-          } satisfies RiskScanCompletedMessage);
+            payload: { requestId, report }
+          };
+          onEvent?.(riskCompletedEvent);
 
           engine.handleRiskReport(requestId, report);
-          pushState(events, requestId);
+          pushState(requestId);
 
-          if (engine.getState(requestId)?.phase === "blocked") {
+          const stateAfterRisk = engine.getState(requestId);
+          if (stateAfterRisk?.phase === "blocked" || stateAfterRisk?.phase === "failed") {
             releaseState(requestId);
-            return events;
+            return [];
           }
-        } catch (error) {
-          void error;
-
+        } catch (error: any) {
+          if (error.message === "OPERATION_ABORTED") return [];
           engine.handleFailure(requestId, "risk-check-failed");
-          pushState(events, requestId);
+          pushState(requestId);
           releaseState(requestId);
-          return events;
+          return [];
         }
       }
 
-      engine.handleQuoteReady(requestId);
-      pushState(events, requestId);
+      const transactions: string[] = [];
+      const actions = intent.actions || [];
+      let currentActionId: string | null = null;
+      let lastQuote: any = null;
 
       try {
-        const preview = await services.buildPreview(requestId, intent);
+        for (const action of actions) {
+          currentActionId = action.id;
+          const { quote, swapTransaction } = await services.getOrder(action);
+          checkCancelled();
+
+          lastQuote = quote;
+          transactions.push(swapTransaction);
+          engine.handleActionReady(requestId, action.id);
+          pushState(requestId);
+        }
+      } catch (error: any) {
+        if (error.message === "OPERATION_ABORTED") return [];
+        if (currentActionId) {
+          engine.handleActionFailed(requestId, currentActionId);
+        } else {
+          engine.handleFailure(requestId, "quote-failed");
+        }
+        pushState(requestId);
+        releaseState(requestId);
+        return [];
+      }
+
+      try {
+        const bundleSimulation = await services.simulateBundle(transactions);
+        checkCancelled();
+
+        if (
+          bundleSimulation &&
+          typeof bundleSimulation === "object" &&
+          "success" in bundleSimulation &&
+          bundleSimulation.success === false
+        ) {
+          throw new Error(
+            ("error" in bundleSimulation && typeof bundleSimulation.error === "string"
+              ? bundleSimulation.error
+              : undefined) ||
+              ("summary" in bundleSimulation && typeof bundleSimulation.summary === "string"
+                ? bundleSimulation.summary
+                : undefined) ||
+              "simulation-failed"
+          );
+        }
+
+        const preview = await services.buildPreview(requestId, intent, transactions, bundleSimulation, lastQuote);
+        checkCancelled();
+
         engine.handlePreviewReady(requestId);
-        pushState(events, requestId);
-        events.push({
+        pushState(requestId);
+        
+        const previewReadyEvent: ExecutionPreviewReadyMessage = {
           type: "execution.preview.ready",
           payload: preview
-        } satisfies ExecutionPreviewReadyMessage);
+        };
+        onEvent?.(previewReadyEvent);
+        
         lastPreviewByRequestId.set(requestId, preview);
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : "simulation-failed";
+      } catch (error: any) {
+        if (error.message === "OPERATION_ABORTED") return [];
+        let reason = error instanceof Error ? error.message : "simulation-failed";
+        
+        if (reason.includes("Jito")) {
+            reason = "Temporary provider congestion. Please try again or check settings.";
+        }
 
         engine.handleFailure(requestId, "simulation-failed");
-        events.push({
+        const previewFailedEvent: ExecutionPreviewFailedMessage = {
           type: "execution.preview.failed",
-          payload: {
-            requestId,
-            stage: "simulate",
-            reason
-          }
-        } satisfies ExecutionPreviewFailedMessage);
-        pushState(events, requestId);
+          payload: { requestId, stage: "simulate", reason }
+        };
+        onEvent?.(previewFailedEvent);
+
+        pushState(requestId);
         releaseState(requestId);
       }
 
-      return events;
+      return [];
     },
+
     async handleExecutionConfirmed(
       message: ExecutionConfirmedMessage
     ): Promise<SIPRuntimeMessage[]> {
@@ -182,60 +275,52 @@ export function createMessageRouter(
       const state = engine.getState(requestId);
 
       if (state?.phase !== "awaiting-signature") {
-        return [createStateChangedMessage(requestId, state)];
+        pushState(requestId);
+        return [];
       }
 
       engine.handleExecutionConfirmed(requestId);
-
-      return [createStateChangedMessage(requestId, engine.getState(requestId))];
+      pushState(requestId);
+      return [];
     },
+
     handleExecutionCancelled(
       message: ExecutionCancelledMessage
     ): SIPRuntimeMessage[] {
       const { requestId } = message.payload;
-
       engine.handleExecutionCancelled(requestId);
-      lastIntentByRequestId.delete(requestId);
-      lastPreviewByRequestId.delete(requestId);
-      const events = [createStateChangedMessage(requestId, engine.getState(requestId))];
-      releaseState(requestId);
-
-      return events;
+      pushState(requestId);
+      return [];
     },
+
     handleTransactionSubmitted(
       message: TransactionSubmittedMessage
     ): SIPRuntimeMessage[] {
       const { requestId } = message.payload;
-
       engine.handleTransactionSubmitted(requestId);
-
-      return [createStateChangedMessage(requestId, engine.getState(requestId))];
+      pushState(requestId);
+      return [];
     },
+
     handleTransactionFailed(
       message: TransactionFailedMessage
     ): SIPRuntimeMessage[] {
       const { requestId } = message.payload;
-
       engine.handleSubmitFailed(requestId);
-      lastIntentByRequestId.delete(requestId);
-      lastPreviewByRequestId.delete(requestId);
-      const events = [createStateChangedMessage(requestId, engine.getState(requestId))];
-      releaseState(requestId);
-
-      return events;
+      pushState(requestId);
+      return [];
     },
+
     handleTransactionSettled(
       message: TransactionSettledMessage
     ): SIPRuntimeMessage[] {
       const { requestId } = message.payload;
-
       engine.handleTransactionSettled(requestId);
       lastIntentByRequestId.delete(requestId);
       lastPreviewByRequestId.delete(requestId);
-      const events = [createStateChangedMessage(requestId, engine.getState(requestId))];
+      pushState(requestId);
       releaseState(requestId);
-
-      return events;
+      return [];
     }
   };
 }

@@ -11,7 +11,7 @@
 本文件覆盖以下运行时对象：
 
 - 页面感知快照
-- Intent 协议
+- `SIPIntent` / `SIPAction` 协议
 - 风险报告
 - 执行预览
 - 工作流状态消息
@@ -30,6 +30,7 @@
 - `Side Panel` 只消费稳定对象，不拼装底层响应
 - 同一语义只保留一个权威类型，不允许 UI 和编排层各自定义半兼容结构
 - 所有对象优先服务于 MVP 的“可校验、可解释、可演示”
+- `actions / bundle` 是当前权威执行模型，文档和代码都必须围绕它对齐
 
 ## 4. 关键枚举
 
@@ -50,13 +51,30 @@ MVP 规则：
 export type AmountMode = "exact" | "half" | "all";
 ```
 
+### 4.3 请求模式
+
+```ts
+export type SIPIntentMode = "SINGLE" | "ATOMIC_BUNDLE";
+```
+
 说明：
 
-- `exact`: 已有明确原子单位数量
-- `half`: 基于余额推导一半
-- `all`: 基于余额推导全部
+- `SINGLE`: 当前请求只包含一个动作
+- `ATOMIC_BUNDLE`: 当前请求包含多个需要按同一工作流协同处理的动作
 
-### 4.3 工作流状态
+### 4.4 动作状态
+
+```ts
+export type SIPActionStatus = "pending" | "ready" | "failed";
+```
+
+说明：
+
+- `pending`: 动作已生成，但下游执行产物尚未就绪
+- `ready`: 动作已拿到继续执行所需的中间产物
+- `failed`: 动作在请求内部流程中失败
+
+### 4.5 工作流状态
 
 ```ts
 export type WorkflowPhase =
@@ -78,7 +96,7 @@ export type WorkflowPhase =
 - `unknown` 是风险标签，不是工作流状态
 - `needsClarification` 是 Intent 元数据，不是工作流状态
 
-### 4.4 工作流原因
+### 4.6 工作流原因
 
 ```ts
 export type WorkflowReason =
@@ -95,21 +113,11 @@ export type WorkflowReason =
   | "confirmed";
 ```
 
-说明：
-
-- `reason` 用于解释状态切换原因
-- UI 可以展示对应文案，但不应依赖自由文本做分支判断
-
-### 4.5 风险等级
+### 4.7 风险等级
 
 ```ts
 export type RiskLevel = "low" | "medium" | "high" | "unknown";
 ```
-
-说明：
-
-- `unknown` 表示数据不足，不能伪装成安全
-- `high` 表示高风险或命中明确阻断规则
 
 ## 5. 页面感知契约
 
@@ -140,38 +148,87 @@ export interface DetectedContextSnapshot {
 
 ## 6. Intent 契约
 
+### 6.1 动作负载
+
+当前 MVP 只定义可执行的 `SWAP` 动作负载：
+
+```ts
+export interface SwapActionPayload {
+  inputMint: string;
+  outputMint: string;
+  amount: string;
+  amountMode: AmountMode;
+  slippageBps: number;
+  platform: string;
+  userPublicKey?: string;
+}
+```
+
+约束：
+
+- `outputMint` 不允许用空字符串占位
+- `inputMint === outputMint` 时应视为无效 intent
+- `amount` 必须使用可跨边界传输的字符串表示
+
+### 6.2 澄清负载
+
+```ts
+export type ClarificationKind =
+  | "missing-output-mint"
+  | "unknown-output-mint"
+  | "ambiguous-output-mint"
+  | "underspecified-request";
+
+export interface ClarificationPayload {
+  kind: ClarificationKind;
+  message: string;
+  candidateSymbols?: string[];
+}
+```
+
+### 6.3 SIPAction
+
+```ts
+export interface SIPAction {
+  id: string;
+  type: IntentType;
+  payload: SwapActionPayload;
+  status: SIPActionStatus;
+}
+```
+
+MVP 规则：
+
+- 当前真实执行链只消费 `type = "SWAP"` 的动作
+- 其它动作类型可保留在结构中用于未来扩展或展示，但不应进入真实执行链
+
+### 6.4 SIPIntent
+
 ```ts
 export interface SIPIntent {
-  intent: IntentType;
-  confidence: number;
-  payload: {
-    inputMint: string;
-    outputMint: string;
-    amount: string;
-    amountMode: AmountMode;
-    slippageBps: number;
-    platform: string;
-  };
+  intentId: string;
+  actions: SIPAction[];
+  mode: SIPIntentMode;
   metadata: {
+    strategyGoal: string;
+    estimatedNetChange?: unknown;
+    jitoTipLamports: number;
     reasoning: string;
     requiresRiskScan: boolean;
     sourceContext: string[];
     needsClarification: boolean;
+    clarification?: ClarificationPayload;
   };
 }
 ```
 
 关键约束：
 
-- Intent 必须先通过 schema 校验，再进入执行链
-- `outputMint` 不允许用空字符串占位
+- Intent 必须先通过结构和业务校验，再进入执行链
+- `actions.length === 0` 时应视为无效 intent
 - `needsClarification = true` 时不能进入报价和签名链
-- `confidence` 影响 UI 提示，但不能替代结构和业务校验
-
-MVP 推荐业务规则：
-
-- `intent !== "SWAP"` 时只展示解析结果，不进入真实执行链
-- `inputMint === outputMint` 时直接视为无效 intent
+- `mode = "SINGLE"` 通常对应一个动作
+- `mode = "ATOMIC_BUNDLE"` 表示多个动作属于同一个 `requestId` 的执行请求
 
 ## 7. 风险报告契约
 
@@ -191,20 +248,11 @@ export interface SecurityReport {
 }
 ```
 
-字段语义：
-
-- `score`: 供 UI 和调试使用的综合分值
-- `level`: 面向用户展示的风险等级
-- `source`: 当前风险结果来自 Wasm 还是策略回退
-- `blocking`: 是否阻断当前执行流程
-- `checks`: 具体检查项明细
-- `summary`: 给 UI 直接展示的摘要
-
 关键约束：
 
 - `blocking = true` 时必须至少有一个可解释的失败原因
 - `level = "unknown"` 时不得展示为已通过检查
-- `Freeze Authority` 在 MVP 中默认只警告，不单独阻断
+- `policy-fallback` 是允许的显式回退来源，不应伪装成 `wasm`
 
 ## 8. 执行预览契约
 
@@ -217,20 +265,25 @@ export interface ExecutionPreview {
   slippageBps: number;
   estimatedFeeLamports: string;
   simulationSummary?: string;
+  swapTransaction?: string;
+  bundleTransactions?: string[];
 }
 ```
 
 说明：
 
 - 这是给 UI 直接消费的预览结果对象
-- 可以来源于 Jupiter、simulate 和本地格式化逻辑的组合
-- 不要求把底层原始响应全部暴露给 UI
+- 单动作路径通常使用 `swapTransaction`
+- Bundle 路径可使用 `bundleTransactions`
+- `simulationSummary` 可以表达成功、失败或降级说明，但不得把失败伪装成已验证成功
 
 关键约束：
 
 - 预览对象必须在签名前可读、可解释
 - 报价成功但模拟失败时，不得伪装成可执行预览
 - `requestId` 必须和当前工作流保持一致
+- `awaiting-signature` 只应在当前预览对象满足签名前最小可解释条件时出现
+- 生产默认不允许通过 mock preview、mock intent 或 mock wallet 结果进入真实执行链
 
 ## 9. 工作流状态消息契约
 
@@ -263,11 +316,30 @@ export interface IntentParseRequestedMessage {
     tabId: number;
     userInput: string;
     contextSnapshot: DetectedContextSnapshot;
+    userPublicKey?: string;
   };
 }
 ```
 
-### 10.2 风险扫描完成
+### 10.2 风险扫描请求
+
+```ts
+export interface RiskScanRequestedMessage {
+  type: "risk.scan.requested";
+  payload: {
+    requestId: string;
+    mintAddress: string;
+    sourceAction: SIPAction;
+  };
+}
+```
+
+说明：
+
+- 当前风险扫描消息按动作边界传递最小可解释输入
+- 不再引用不存在的 `SIPIntent["payload"]`
+
+### 10.3 风险扫描完成
 
 ```ts
 export interface RiskScanCompletedMessage {
@@ -279,7 +351,7 @@ export interface RiskScanCompletedMessage {
 }
 ```
 
-### 10.3 执行预览完成
+### 10.4 执行预览完成
 
 ```ts
 export interface ExecutionPreviewReadyMessage {
@@ -288,7 +360,38 @@ export interface ExecutionPreviewReadyMessage {
 }
 ```
 
-### 10.4 交易已提交
+### 10.5 执行预览失败
+
+```ts
+export interface ExecutionPreviewFailedMessage {
+  type: "execution.preview.failed";
+  payload: {
+    requestId: string;
+    stage: "quote" | "simulate";
+    reason: string;
+  };
+}
+```
+
+### 10.6 钱包签名消息
+
+```ts
+export interface ExecutionConfirmedMessage {
+  type: "execution.confirmed";
+  payload: {
+    requestId: string;
+  };
+}
+
+export interface ExecutionCancelledMessage {
+  type: "execution.cancelled";
+  payload: {
+    requestId: string;
+  };
+}
+```
+
+### 10.7 交易提交消息
 
 ```ts
 export interface TransactionSubmittedMessage {
@@ -298,22 +401,7 @@ export interface TransactionSubmittedMessage {
     signature: string;
   };
 }
-```
 
-### 10.5 签名已取消
-
-```ts
-export interface ExecutionCancelledMessage {
-  type: "execution.cancelled";
-  payload: {
-    requestId: string;
-  };
-}
-```
-
-### 10.6 交易提交失败
-
-```ts
 export interface TransactionFailedMessage {
   type: "transaction.failed";
   payload: {
@@ -321,11 +409,7 @@ export interface TransactionFailedMessage {
     reason: string;
   };
 }
-```
 
-### 10.7 交易已确认
-
-```ts
 export interface TransactionSettledMessage {
   type: "transaction.settled";
   payload: {
@@ -351,26 +435,18 @@ extension/src/shared/
 └── messages.ts
 ```
 
-推荐职责：
-
-- `context.ts`: `TokenHint`、`DetectedContextSnapshot`
-- `intent.ts`: `IntentType`、`AmountMode`、`SIPIntent`
-- `risk.ts`: `RiskLevel`、`SecurityReport`
-- `execution.ts`: `ExecutionPreview`
-- `workflow.ts`: `WorkflowPhase`、`WorkflowReason`
-- `messages.ts`: 各类消息接口和联合类型
-
 ## 12. 校验与实现建议
 
-- 先把这些契约落到 `shared/`，再写 Background 编排
+- 先把这些契约落到 `shared/`，再写 `background` 编排
 - 不要在 UI 组件 props 里重新发明一套近似类型
 - 所有外部返回结果都先映射成本文定义的稳定对象，再传给 UI
 - 对同一 `requestId` 的消息流做日志串联，便于调试
+- mock 或 fallback 返回的对象也必须遵守本文契约，不得伪装成已验证成功
+- 生产默认应将 `mock-services`、mock intent parser、mock wallet provider 限制在 test/dev 显式入口中
 
 ## 13. 与其它文档的关系
 
-- 与 [intent-schema.md](./intent-schema.md) 对齐 Intent 字段和校验要求
 - 与 [message-types.md](./message-types.md) 对齐消息结构
-- 与 [../security/risk-engine.md](../security/risk-engine.md) 对齐风险报告
 - 与 [../architecture/workflow-state-machine.md](../architecture/workflow-state-machine.md) 对齐状态与转移
 - 与 [ui-state-mapping.md](./ui-state-mapping.md) 对齐 UI 消费语义
+- 与 [../security/mvp-risk-policy.md](../security/mvp-risk-policy.md) 对齐风险处理边界

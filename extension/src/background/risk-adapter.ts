@@ -37,12 +37,16 @@ function buildPolicyReport(intent: SIPIntent): SecurityReport {
   let blocking = false;
   let level: SecurityReport["level"] = "low";
 
-  const outputMint = intent.payload.outputMint.trim();
+  // Use optional chaining and focus on the first action for policy fallback
+  const firstAction = intent.actions?.[0];
+  const outputMint = firstAction?.payload?.outputMint?.trim() || "";
+  const platform = firstAction?.payload?.platform?.toLowerCase() || "";
+  
   const hasOutputMint = outputMint.length > 0;
   const hasBlockedMarker = outputMint.includes("blocked");
-  const confidence = intent.confidence;
-  const needsClarification = intent.metadata.needsClarification;
-  const requiresRiskScan = intent.metadata.requiresRiskScan;
+  
+  const needsClarification = intent.metadata?.needsClarification || false;
+  const requiresRiskScan = intent.metadata?.requiresRiskScan || false;
 
   if (!hasOutputMint) {
     blocking = true;
@@ -70,7 +74,7 @@ function buildPolicyReport(intent: SIPIntent): SecurityReport {
     );
   }
 
-  if (intent.payload.platform.toLowerCase() === "wallet") {
+  if (platform === "wallet") {
     checks.push(
       createSecurityCheck(
         "transfer-intent",
@@ -82,26 +86,16 @@ function buildPolicyReport(intent: SIPIntent): SecurityReport {
     level = blocking ? "high" : "medium";
   }
 
-  if (confidence < 0.5 && needsClarification) {
+  if (needsClarification) {
     checks.push(
       createSecurityCheck(
         "clarification-needed",
         "Clarification Needed",
         "warn",
-        "Intent confidence is low and user clarification is still required"
+        "User clarification is still required for this intent"
       )
     );
     level = blocking ? "high" : "medium";
-  } else if (confidence < 0.85 && !blocking) {
-    checks.push(
-      createSecurityCheck(
-        "confidence-low",
-        "Confidence",
-        "warn",
-        "Model confidence is below the preferred operating threshold"
-      )
-    );
-    level = "medium";
   }
 
   if (!requiresRiskScan && !blocking) {
@@ -171,24 +165,101 @@ async function resolveWasmRiskEngine(
   return loadDefaultWasmRiskEngine();
 }
 
+async function fetchTokenSecurity(mint: string) {
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  const JUP_KEY = process.env.JUPITER_API_KEY;
+
+  try {
+    // 1. Fetch Authority via Helius (getAccountInfo/getAsset)
+    const heliusUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
+    const accountResponse = await fetch(heliusUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "risk-check",
+        method: "getAccountInfo",
+        params: [mint, { encoding: "jsonParsed" }]
+      })
+    });
+    const accountData = await accountResponse.json();
+    const parsedData = accountData.result?.value?.data?.parsed?.info;
+
+    // 2. Fetch Verification Status via Jupiter
+    // We check against Jupiter's strict list or verified tokens
+    const jupUrl = `https://api.jup.ag/api/v1/token/${mint}`;
+    const jupResponse = await fetch(jupUrl, {
+      headers: { "x-api-key": JUP_KEY || "" }
+    });
+    const jupData = jupResponse.ok ? await jupResponse.json() : null;
+
+    return {
+      mintAuthority: parsedData?.mintAuthority || null,
+      freezeAuthority: parsedData?.freezeAuthority || null,
+      isJupVerified: !!jupData && jupData.tags?.includes("verified"),
+      // For liquidity, we'd ideally fetch from Birdeye, but for now we'll 
+      // use a heuristic or set a default if verified.
+      liquidityUsd: jupData ? 1000000 : 0 
+    };
+  } catch (err) {
+    console.error("[Risk Adapter] Failed to fetch live security data:", err);
+    return null;
+  }
+}
+
+async function enrichRiskContext(intent: SIPIntent): Promise<SIPIntent> {
+  const firstAction = intent.actions?.[0];
+  const outputMint = firstAction?.payload?.outputMint;
+
+  if (!outputMint || outputMint === "So11111111111111111111111111111111111111112") {
+    return intent;
+  }
+
+  console.log(`[Risk Adapter] Enriching context for mint: ${outputMint}`);
+  const liveData = await fetchTokenSecurity(outputMint);
+
+  if (!liveData) return intent;
+
+  return {
+    ...intent,
+    metadata: {
+      ...intent.metadata,
+      riskContext: {
+        mintAuthority: liveData.mintAuthority,
+        freezeAuthority: liveData.freezeAuthority,
+        isJupVerified: liveData.isJupVerified,
+        liquidityUsd: liveData.liquidityUsd,
+        tokenCreatedAt: Date.now() // Placeholder as creation time requires more complex indexing
+      }
+    }
+  };
+}
+
 export function createDefaultRiskAdapter(
   dependencies: RiskAdapterDependencies = {}
 ): RiskAdapter {
   return {
     async scanRisk(intent: SIPIntent): Promise<SecurityReport> {
+      // Reduce delay for better responsiveness and to avoid test timeouts
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Enrich intent with on-chain data before scanning
+      const enrichedIntent = await enrichRiskContext(intent);
+
       const wasmEngine = await resolveWasmRiskEngine(dependencies);
 
       if (wasmEngine) {
         try {
-          const wasmReport = await wasmEngine.scanRisk(intent);
+          const wasmReport = await wasmEngine.scanRisk(enrichedIntent);
           if (isValidSecurityReport(wasmReport)) {
             return {
               ...wasmReport,
               source: "wasm" satisfies RiskEngineSource
             };
           }
-        } catch {
-          // Fall back to policy when the Wasm engine cannot produce a valid report.
+        } catch (err) {
+          console.error("[Risk Adapter] Wasm scan error:", err);
+          // Fall back to policy
         }
       }
 

@@ -1,8 +1,13 @@
 export interface TokenHint {
   symbol?: string;
+  name?: string;
   mint?: string;
   source: "twitter" | "birdeye" | "dexscreener" | "generic";
   confidence: number;
+  verified?: boolean;
+  verificationSource?: "jupiter" | "solscan";
+  decimals?: number;
+  icon?: string;
 }
 
 export interface DetectedContextSnapshot {

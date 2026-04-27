@@ -10,6 +10,7 @@
 - 所有跨上下文异步消息建议带 `requestId`
 - `type` 使用稳定字符串常量
 - `payload` 中不传递函数、类实例或复杂引用
+- 当前权威 intent 结构是 `actions / bundle`，消息层不得再假设顶层单一 `payload`
 
 ## 3. 基础类型
 
@@ -40,22 +41,8 @@ export type WorkflowReason =
   | "submit-failed"
   | "confirmed";
 
-export interface TokenHint {
-  symbol?: string;
-  mint?: string;
-  source: "twitter" | "birdeye" | "dexscreener" | "generic";
-  confidence: number;
-}
-
-export interface DetectedContextSnapshot {
-  tabId: number;
-  url: string;
-  title: string;
-  selectedText?: string;
-  detectedTokens: TokenHint[];
-  rawHints: string[];
-  detectedAt: string;
-}
+export type SIPIntentMode = "SINGLE" | "ATOMIC_BUNDLE";
+export type SIPActionStatus = "pending" | "ready" | "failed";
 ```
 
 ## 4. 页面感知类消息
@@ -115,7 +102,7 @@ export interface RiskScanRequestedMessage {
   payload: {
     requestId: string;
     mintAddress: string;
-    sourceIntent: SIPIntent["payload"];
+    sourceAction: SIPAction;
   };
 }
 
@@ -127,6 +114,11 @@ export interface RiskScanCompletedMessage {
   };
 }
 ```
+
+说明：
+
+- 当前风险扫描请求按动作边界传递最小可信输入
+- 若后续需要请求级风险消息，应新增独立消息，不要复用不存在的 `SIPIntent["payload"]`
 
 ## 7. 执行预览消息
 
@@ -141,6 +133,8 @@ export interface ExecutionPreviewReadyMessage {
     slippageBps: number;
     estimatedFeeLamports: string;
     simulationSummary?: string;
+    swapTransaction?: string;
+    bundleTransactions?: string[];
   };
 }
 
@@ -153,6 +147,11 @@ export interface ExecutionPreviewFailedMessage {
   };
 }
 ```
+
+约束：
+
+- `simulationSummary` 可表达成功、失败或降级说明
+- 失败或降级说明不得被 UI 解读为已验证成功
 
 ## 8. 交易提交消息
 
@@ -211,7 +210,37 @@ export interface WorkflowStateChangedMessage {
 }
 ```
 
-## 10. 推荐联合类型
+## 10. 可选钱包提交消息
+
+```ts
+export interface WalletSubmissionRequestedMessage {
+  type: "wallet.submission.requested";
+  payload: {
+    requestId: string;
+    intent: SIPIntent;
+    preview: ExecutionPreview;
+  };
+}
+
+export interface WalletSubmissionCompletedMessage {
+  type: "wallet.submission.completed";
+  payload: {
+    requestId: string;
+    signature: string;
+    explorerUrl?: string;
+  };
+}
+
+export interface WalletSubmissionFailedMessage {
+  type: "wallet.submission.failed";
+  payload: {
+    requestId: string;
+    reason: string;
+  };
+}
+```
+
+## 11. 推荐联合类型
 
 ```ts
 export type SIPRuntimeMessage =
@@ -229,13 +258,18 @@ export type SIPRuntimeMessage =
   | TransactionSubmittedMessage
   | TransactionFailedMessage
   | TransactionSettledMessage
+  | WalletSubmissionRequestedMessage
+  | WalletSubmissionCompletedMessage
+  | WalletSubmissionFailedMessage
   | WorkflowStateChangedMessage;
 ```
 
-## 11. 实现建议
+## 12. 实现建议
 
 - 将 message 常量和类型放在同一文件
 - 为 `chrome.runtime.onMessage` 包一层类型安全 helper
 - 所有失败消息都提供 `reason`
 - 所有成功消息都优先返回可直接渲染的数据
 - `reason` 应尽量使用稳定枚举，避免 UI 依赖自由文本分支判断
+- 不要用 `as any` 绕过这里定义的消息形状
+

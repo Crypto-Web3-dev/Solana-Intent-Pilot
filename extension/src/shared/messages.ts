@@ -50,7 +50,7 @@ export interface RiskScanRequestedMessage {
   payload: {
     requestId: string;
     mintAddress: string;
-    sourceIntent: SIPIntent["payload"];
+    sourceAction: SIPIntent["actions"][0];
   };
 }
 
@@ -85,6 +85,22 @@ export interface ExecutionConfirmedMessage {
 
 export interface ExecutionCancelledMessage {
   type: "execution.cancelled";
+  payload: {
+    requestId: string;
+  };
+}
+
+// 新增：前端主动请求取消正在后台运行的任务（如AI解析或模拟）
+export interface ExecutionCancelRequestedMessage {
+  type: "execution.cancel_requested";
+  payload: {
+    requestId: string;
+  };
+}
+
+// 新增：前端请求重置错误状态，重新进入待签名阶段
+export interface ExecutionRetryRequestedMessage {
+  type: "execution.retry_requested";
   payload: {
     requestId: string;
   };
@@ -163,6 +179,8 @@ export type SIPRuntimeMessage =
   | ExecutionPreviewFailedMessage
   | ExecutionConfirmedMessage
   | ExecutionCancelledMessage
+  | ExecutionCancelRequestedMessage
+  | ExecutionRetryRequestedMessage
   | TransactionSubmittedMessage
   | TransactionFailedMessage
   | TransactionSettledMessage

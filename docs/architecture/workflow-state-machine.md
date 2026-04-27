@@ -20,6 +20,12 @@
 - 全局网络状态或节点健康状态
 - 多请求并发调度策略
 
+补充说明：
+
+- 单个 `requestId` 可以包含一个或多个 `SIPAction`
+- 当 `SIPIntent.mode = "ATOMIC_BUNDLE"` 时，多个动作共享同一个请求级工作流
+- `Background` 仍然只维护一条请求级状态链，UI 不按动作自行推导下一状态
+
 这些能力可以存在，但都不应破坏单请求状态机的确定性。
 
 ## 3. 权威原则
@@ -74,6 +80,11 @@ type WorkflowPhase =
 
 - 已收到用户输入，正在生成并校验 `SIPIntent`
 
+补充规则：
+
+- 当前权威 `SIPIntent` 结构是 `intentId + actions[] + mode + metadata`
+- `actions.length === 0` 时直接视为无效 intent
+
 ### 4.4 `risk-checking`
 
 含义：
@@ -86,17 +97,37 @@ type WorkflowPhase =
 
 - 正在获取报价与路由信息
 
+补充规则：
+
+- 对于 `SINGLE` 请求，通常为单动作准备可预览执行产物
+- 对于 `ATOMIC_BUNDLE` 请求，表示为多个动作收集中间执行产物
+- “所有动作都拿到 quote” 不等于“当前请求已经可签名”
+
 ### 4.6 `simulating`
 
 含义：
 
 - 报价已完成，正在模拟签名前结果
 
+补充规则：
+
+- 模拟可以服务于单动作或 bundle 请求
+- 模拟失败时不得伪装成成功预览
+- 显式 fallback 可以存在，但必须被视为降级路径，而不是已验证成功
+
 ### 4.7 `awaiting-signature`
 
 含义：
 
 - 预览已经准备完成，等待用户在钱包中确认签名
+
+进入前提：
+
+- 当前请求存在和 `requestId` 一致的有效 `ExecutionPreview`
+- 未命中 `blocked`
+- 未处于 `failed`
+- 预览已满足签名前最小可解释条件
+- 对 bundle 请求，已有一致的请求级预览结果，而不是只完成部分动作
 
 ### 4.8 `submitting`
 
@@ -275,6 +306,7 @@ simulating -> failed
 
 - 不得伪装成可签名成功
 - 应保留预览上下文供用户理解失败位置
+- 若存在显式降级路径，必须明确表达为“降级/未完全验证”，不得表现为已验证成功
 
 ### 6.6 用户取消签名
 
@@ -359,12 +391,14 @@ submitting -> failed
 - `failed` 后不应丢失定位错误所需的数据
 - `blocked` 后不应丢失风险明细
 - `awaiting-signature -> idle` 时应尽量保留最近预览，便于再次确认
+- `ATOMIC_BUNDLE` 请求失败时，应尽量保留请求级预览和动作级中间上下文，便于定位失败点
 
 ## 9. UI 映射要求
 
 - `failed` 必须区分于 `blocked`
 - `needsClarification` 必须区分于 `failed`
 - `unknown` 风险标签必须区分于 `high`
+- 降级预览必须区分于已验证成功预览
 - 所有 CTA 状态由工作流状态和风险标签共同决定
 
 推荐规则：

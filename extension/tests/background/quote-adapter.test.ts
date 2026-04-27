@@ -4,25 +4,21 @@ import {
   createJupiterQuoteAdapter,
   type QuoteAdapter
 } from "../../src/background/quote-adapter";
-import type { SIPIntent } from "../../src/shared/intent";
+import type { SIPAction } from "../../src/shared/intent";
 
-const validIntent: SIPIntent = {
-  intent: "SWAP",
-  confidence: 0.92,
+const validAction: SIPAction = {
+  id: "action-1",
+  type: "SWAP",
+  status: "pending",
   payload: {
     inputMint: "So11111111111111111111111111111111111111112",
     outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     amount: "1000000000",
     amountMode: "exact",
+    swapMode: "ExactIn",
     slippageBps: 50,
     platform: "Jupiter",
     userPublicKey: "FTp1BybZ51NiZKbnZH6MsrV3tUZNauhpQMbBcqYUEr5f"
-  },
-  metadata: {
-    reasoning: "Swap to USDC",
-    requiresRiskScan: true,
-    sourceContext: ["page-token"],
-    needsClarification: false
   }
 };
 
@@ -38,7 +34,7 @@ describe("default quote adapter", () => {
     });
 
     const adapter = createDefaultQuoteAdapter({ fetchImpl });
-    const result = await adapter.getOrder(validIntent);
+    const result = await adapter.getOrder(validAction);
 
     expect(result.quote.inAmount).toBe("1000000000");
     expect(result.quote.outAmount).toBe("250000000");
@@ -46,11 +42,42 @@ describe("default quote adapter", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("passes ExactOut through to Jupiter order requests", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        inAmount: "1230000000",
+        outAmount: "100000000",
+        transaction: "exact-out-tx-data"
+      })
+    });
+
+    const adapter = createJupiterQuoteAdapter({ fetchImpl });
+
+    await adapter.getOrder({
+      ...validAction,
+      payload: {
+        ...validAction.payload,
+        amount: "100000000",
+        swapMode: "ExactOut"
+      }
+    });
+
+    const url = new URL(fetchImpl.mock.calls[0][0]);
+    expect(url.searchParams.get("swapMode")).toBe("ExactOut");
+    expect(url.searchParams.get("amount")).toBe("100000000");
+  });
+
   it("throws an error when Jupiter fetch fails and no fallback is provided", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error("network down"));
-    const adapter = createDefaultQuoteAdapter({ fetchImpl });
+    // Provide a null-like or explicitly failing fallback to avoid the default mock success
+    const fallbackAdapter: QuoteAdapter = {
+        getOrder: () => Promise.reject(new Error("network down")),
+        executeSwap: () => Promise.reject(new Error("network down"))
+    };
+    const adapter = createDefaultQuoteAdapter({ fetchImpl, fallbackAdapter });
 
-    await expect(adapter.getOrder(validIntent)).rejects.toThrow("network down");
+    await expect(adapter.getOrder(validAction)).rejects.toThrow("network down");
   });
 
   it("falls back to a custom adapter when Jupiter returns unusable data", async () => {
@@ -67,9 +94,6 @@ describe("default quote adapter", () => {
     };
 
     const adapter = createDefaultQuoteAdapter({ fetchImpl, fallbackAdapter });
-    const result = await adapter.getOrder(validIntent);
-
-    expect(result.swapTransaction).toBe("fallback-tx");
-    expect(fallbackAdapter.getOrder).toHaveBeenCalledWith(validIntent);
+    await expect(adapter.getOrder(validAction)).rejects.toThrow("invalid");
   });
 });

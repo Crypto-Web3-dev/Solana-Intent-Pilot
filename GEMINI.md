@@ -40,6 +40,7 @@ Run these commands from the `extension/` directory:
 - **Language:** 所有回复必须使用中文。
 - **Type Safety:** Prioritize shared types in `extension/src/shared/` to ensure consistency between background and UI.
 - **Environment Variables:** Use `.env` for `OPENAI_API_KEY`, `HELIUS_API_KEY`, and RPC URLs. Never commit these keys.
+- **Worktree Policy:** 除非特别说明，所有代码和文档的改动都必须在工作树（worktree）目录下进行（如 `.worktrees/atomic-strategies`）。
 
 ## 6. Critical Documents (Global Context)
 - **Security Audit:** `docs/SECURITY_AUDIT_REPORT` (Note: This file is currently missing; alert the user if needed).

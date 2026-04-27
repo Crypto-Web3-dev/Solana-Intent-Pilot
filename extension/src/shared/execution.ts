@@ -7,4 +7,11 @@ export interface ExecutionPreview {
   estimatedFeeLamports: string;
   simulationSummary?: string;
   swapTransaction?: string;
+  bundleTransactions?: string[];
+  protocolFeeAmount?: string;
+  protocolFeeMint?: string;
+  platformFeeBps?: number;
+  signatureFeeLamports?: number;
+  prioritizationFeeLamports?: number;
+  rentFeeLamports?: number;
 }

@@ -1,26 +1,32 @@
 import type { ExecutionPreview } from "../../shared/execution";
-import type { ClarificationPayload } from "../../shared/intent";
+import type { ClarificationPayload, SIPIntent } from "../../shared/intent";
 import type { WorkflowPhase, WorkflowReason } from "../../shared/workflow";
 import type { WalletStatus } from "../wallet-state";
 
 export function ActionCard({
   preview,
+  intent,
   phase,
   reason,
   clarification,
   walletStatus,
   isSigning,
   onConfirm,
+  onRetry,
   onCancel,
+  onFailSubmit,
+  onSettle,
   onOpenNormalPage
 }: {
   preview: ExecutionPreview | null;
+  intent: SIPIntent | null;
   phase: WorkflowPhase;
   reason: WorkflowReason | string | null;
   clarification?: ClarificationPayload | null;
   walletStatus: WalletStatus;
   isSigning: boolean;
   onConfirm: () => void;
+  onRetry?: () => void;
   onCancel: () => void;
   onFailSubmit: () => void;
   onSettle: () => void;
@@ -29,13 +35,61 @@ export function ActionCard({
   const isSucceeded = phase === "confirmed" || (phase === "idle" && reason === "transaction-settled");
   const isFailed = phase === "failed";
   const isUnsupportedPage = phase === "blocked" && reason === "unsupported-page";
-  
+  const isDegradedPreview =
+    Boolean(preview?.simulationSummary) &&
+    /(degraded|failed|not configured|not fully verified)/i.test(
+      preview.simulationSummary ?? ""
+    );
+
+  const formatSummary = (summary?: string) => {
+    if (!summary) return "Ready to execute.";
+    let formatted = summary;
+    
+    const errorMap: Record<string, string> = {
+        "User rejected the request": "Signature cancelled by user",
+        "submit-failed": "Transaction failed to broadcast",
+        "simulation-failed": "Execution check failed",
+        "insufficient funds": "Insufficient balance for this trade"
+    };
+
+    for (const [raw, friendly] of Object.entries(errorMap)) {
+        if (formatted.toLowerCase().includes(raw.toLowerCase())) {
+            return friendly;
+        }
+    }
+
+    formatted = formatted.replace(/1000000000/g, "1.0");
+    formatted = formatted.replace(/So11111111111111111111111111111111111111112/g, "SOL");
+    formatted = formatted.replace(/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263/g, "BONK");
+    formatted = formatted.replace("Success (RPC): Consumed ", "Est. CU: ");
+    formatted = formatted.replace("Simulation Logic Failed:", "Failed:");
+    
+    return formatted;
+  };
+
+  const getDecimals = (symbol?: string, explicitDecimals?: number) => {
+    if (typeof explicitDecimals === 'number') return explicitDecimals;
+    const s = symbol?.toUpperCase();
+    if (s === "USDC" || s === "USDT") return 6;
+    if (s === "BONK" || s === "BONKRADIO") return 5;
+    return 9;
+  };
+
+  const formatAmountWithSymbol = (amount: string, symbol?: string, explicitDecimals?: number) => {
+    if (amount === "multi" || amount === "Multi") return "Varies";
+    const val = Number(amount);
+    if (isNaN(val)) return amount;
+    const decimals = getDecimals(symbol, explicitDecimals);
+    const formatted = (val / Math.pow(10, decimals)).toFixed(4);
+    return `${parseFloat(formatted).toString()} ${symbol || "Tokens"}`;
+  };
+
   if (isSucceeded) {
     return (
       <div className="success-card" style={{ padding: 16, borderRadius: 12, textAlign: "center" }}>
         <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
-        <div style={{ fontWeight: "bold", fontSize: 18 }}>Transaction Complete</div>
-        <div style={{ fontSize: 13, marginTop: 8, opacity: 0.9 }}>
+        <div style={{ fontWeight: "bold", fontSize: 18, color: "#10b981" }}>Transaction Complete</div>
+        <div style={{ fontSize: 13, marginTop: 8, opacity: 0.9, color: "#94a3b8" }}>
           Your swap was successfully executed on Solana.
         </div>
         {preview?.signature && (
@@ -53,65 +107,142 @@ export function ActionCard({
   }
 
   if (isFailed) {
+    const canRetry = Boolean(preview);
+
     return (
-      <div style={{ padding: 12, background: "rgba(239, 68, 68, 0.1)", border: "1px solid #ef4444", borderRadius: 12 }}>
-        <div style={{ fontWeight: "bold", color: "#ef4444" }}>Execution Failed</div>
-        <div style={{ fontSize: 12, marginTop: 4 }}>{reason || "An unknown error occurred during execution."}</div>
-        <button onClick={onCancel} style={{ marginTop: 12, padding: "6px 12px", borderRadius: 8, border: "1px solid #ef4444", background: "none", color: "#ef4444", cursor: "pointer" }}>
-          Try Again
-        </button>
+      <div style={{ padding: 16, background: "rgba(239, 68, 68, 0.05)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: 16 }}>
+        <div style={{ fontWeight: "bold", color: "#f87171", display: "flex", alignItems: "center", gap: 8 }}>
+           <span style={{ fontSize: 18 }}>⚠️</span> Execution Paused
+        </div>
+        <div style={{ fontSize: 13, marginTop: 10, color: "#94a3b8", lineHeight: 1.4 }}>
+            {formatSummary(reason ?? undefined)}
+        </div>
+        
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            {canRetry && onRetry && (
+                <button onClick={onRetry} style={{ 
+                    flex: 2, padding: "12px", borderRadius: 10, 
+                    background: "linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%)", 
+                    color: "#082f49", fontWeight: 700, border: 0, cursor: "pointer" 
+                }}>
+                    Retry Signature
+                </button>
+            )}
+            
+            <button onClick={onCancel} style={{ 
+                flex: 1, padding: "12px", borderRadius: 10, 
+                border: "1px solid rgba(248, 113, 113, 0.3)", background: "rgba(255, 255, 255, 0.05)", 
+                color: "#f8fafc", fontWeight: 600, cursor: "pointer" 
+            }}>
+                {canRetry ? "Cancel" : "Reset & Try Again"}
+            </button>
+        </div>
       </div>
     );
   }
 
+  const inputSymbol = intent?.actions?.[0]?.payload?.inputSymbol || "SOL";
+  const outputSymbol = intent?.actions?.[0]?.payload?.outputSymbol || "Tokens";
+  const inputDecimals = intent?.actions?.[0]?.payload?.inputDecimals;
+  const outputDecimals = intent?.actions?.[0]?.payload?.outputDecimals;
+
   return (
-    <div style={{ padding: 12, border: "1px solid #334155", borderRadius: 12, background: "rgba(15, 23, 42, 0.3)" }}>
-      <div style={{ fontSize: 12, color: "#94a3b8", textTransform: "uppercase", marginBottom: 8 }}>Execution Preview</div>
-      
+    <div style={{ padding: 16, border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: 16, background: "rgba(255, 255, 255, 0.03)" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 12, letterSpacing: "0.05em" }}>
+        Proposed Execution
+      </div>
+
       {preview ? (
         <div style={{ marginBottom: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-            <span>Route</span>
-            <span style={{ fontWeight: "bold", color: "#38bdf8" }}>{preview.routeLabel}</span>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ color: "#94a3b8", fontSize: 13 }}>Action</span>
+            <span style={{ fontWeight: "600", color: "#38bdf8", fontSize: 13 }}>
+                {preview.routeLabel === "Atomic Bundle" ? "Atomic Strategy" : "Direct Swap"}
+            </span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-            <span>Min Output</span>
-            <span style={{ fontWeight: "bold" }}>{preview.outputAmount} tokens</span>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ color: "#94a3b8", fontSize: 13 }}>Est. Impact</span>
+            <span style={{ fontWeight: "600", color: "#f8fafc", fontSize: 13 }}>
+                {formatAmountWithSymbol(preview.inputAmount, inputSymbol, inputDecimals)} → {preview.outputAmount === "Multi" ? "Targets" : formatAmountWithSymbol(preview.outputAmount, outputSymbol, outputDecimals)}
+            </span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.7 }}>
-            <span>Est. Fee</span>
-            <span>{preview.estimatedFeeLamports} lamports</span>
+          
+          <div style={{ 
+            marginTop: 12, padding: "10px 12px", background: "rgba(0,0,0,0.25)", 
+            borderRadius: 10, fontSize: 12, color: "#94a3b8", borderLeft: "3px solid #0ea5e9" 
+          }}>
+             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ color: "#64748b", fontSize: 12 }}>Estimated Network Fee:</span>
+                <span style={{ color: "#94a3b8", fontSize: 12 }}>
+                    {preview.estimatedFeeLamports ? `${(Number(preview.estimatedFeeLamports) / 1e9).toFixed(6)} SOL` : "Unknown"}
+                </span>
+             </div>
+             <div style={{ borderTop: "1px dashed rgba(255,255,255,0.05)", paddingTop: 6, marginTop: 4 }}>
+                {(() => {
+                  let summary = formatSummary(preview.simulationSummary);
+                  summary = summary.replace("Success: Consumed ", "Est. CU: ");
+                  
+                  if (summary.startsWith("Est. CU:")) {
+                    return (
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "#64748b", fontSize: 12 }}>Estimated Compute Units:</span>
+                        <span style={{ color: "#94a3b8", fontSize: 12 }}>{summary.replace("Est. CU: ", "")}</span>
+                      </div>
+                    );
+                  }
+                  return <div style={{ color: "#94a3b8", fontSize: 12 }}>{summary}</div>;
+                })()}
+             </div>
           </div>
-          <div style={{ marginTop: 8, fontSize: 11, fontStyle: "italic", opacity: 0.8 }}>
-            Sim: {preview.simulationSummary}
-          </div>
+
+          {isDegradedPreview ? (
+            <div style={{
+                marginTop: 12, padding: 10, borderRadius: 10, 
+                background: "rgba(245, 158, 11, 0.05)", border: "1px solid rgba(245, 158, 11, 0.2)",
+                fontSize: 12, color: "#fcd34d", lineHeight: 1.4
+            }}>
+              <strong>Note:</strong> Preview is running in a degraded state.
+            </div>
+          ) : null}
         </div>
       ) : (
-        <div style={{ margin: "20px 0", textAlign: "center", color: "#64748b" }}>
-          {phase === "quoting" || phase === "simulating" ? "Preparing preview..." : "Waiting for intent..."}
+        <div style={{ margin: "24px 0", textAlign: "center", color: "#64748b", fontSize: 14 }}>
+          {phase === "quoting" || phase === "simulating" ? "Synthesizing strategy..." : "Waiting for intent..."}
         </div>
       )}
 
       {phase === "awaiting-signature" && (
-        <div style={{ display: "flex", gap: 8 }}>
-          <button 
-            onClick={onConfirm} 
-            disabled={isSigning}
-            style={{ flex: 1, padding: 12, borderRadius: 10, background: "#38bdf8", color: "#082f49", fontWeight: "bold", border: 0, cursor: isSigning ? "not-allowed" : "pointer" }}
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button
+            onClick={onConfirm}
+            disabled={isSigning || isDegradedPreview}
+            style={{ 
+                flex: 1, padding: "14px", borderRadius: 12, 
+                background: isDegradedPreview ? "#1e293b" : "linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%)", 
+                color: isDegradedPreview ? "#64748b" : "#082f49", 
+                fontWeight: 800, border: 0, cursor: isSigning ? "not-allowed" : "pointer",
+                boxShadow: isDegradedPreview ? "none" : "0 4px 12px rgba(14, 165, 233, 0.2)"
+            }}
           >
-            {isSigning ? "Sign in Wallet..." : "Confirm & Swap"}
+            {isSigning ? "Signing..." : isDegradedPreview ? "Verification Failed" : "Execute Strategy"}
           </button>
-          <button 
+          <button
             onClick={onCancel}
-            style={{ padding: 12, borderRadius: 10, background: "rgba(100, 116, 139, 0.2)", color: "white", border: 0, cursor: "pointer" }}
+            style={{ 
+                padding: "14px 20px", borderRadius: 12, background: "rgba(255, 255, 255, 0.05)", 
+                color: "#f8fafc", border: "1px solid rgba(255, 255, 255, 0.1)", fontWeight: 600, cursor: "pointer" 
+            }}
           >
             Cancel
           </button>
         </div>
       )}
-
+      
       {isUnsupportedPage && (
-        <button onClick={onOpenNormalPage} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#f59e0b", color: "black", border: 0, fontWeight: "bold", cursor: "pointer" }}>
+        <button onClick={onOpenNormalPage} style={{ 
+            width: "100%", marginTop: 12, padding: 12, borderRadius: 12, 
+            background: "#f59e0b", color: "#000", border: 0, fontWeight: 700, cursor: "pointer" 
+        }}>
           Switch to normal tab
         </button>
       )}

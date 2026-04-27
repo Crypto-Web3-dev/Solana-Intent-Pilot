@@ -23,11 +23,7 @@ export function createDefaultIntentParser(): IntentParser {
 
   return {
     async parseIntent(userInput: string, context?: DetectedContextSnapshot) {
-      try {
-        return await openAIParser.parseIntent(userInput, context);
-      } catch {
-        return mockParseIntent(userInput);
-      }
+      return openAIParser.parseIntent(userInput, context);
     }
   };
 }

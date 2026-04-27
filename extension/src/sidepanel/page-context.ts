@@ -16,113 +16,17 @@ type ChromeApi = {
   tabs?: ChromeTabsApi;
 };
 
+// 核心优化：缩短等待内容脚本的时间，防止按钮卡顿感
+const CONTENT_CONTEXT_TIMEOUT_MS = 600;
+
 function getChromeApi() {
   return (globalThis as typeof globalThis & {
     chrome?: ChromeApi;
   }).chrome;
 }
-const HINT_STOP_WORDS = new Set([
-  "the",
-  "and",
-  "for",
-  "with",
-  "now",
-  "this",
-  "that",
-  "from",
-  "your",
-  "page",
-  "address",
-  "token"
-]);
 
 function isNormalPage(url?: string) {
-  return Boolean(url && (url.startsWith("http://") || url.startsWith("https://")));
-}
-
-function detectSource(url: string): TokenHint["source"] {
-  if (url.includes("x.com") || url.includes("twitter.com")) {
-    return "twitter";
-  }
-
-  if (url.includes("dexscreener.com")) {
-    return "dexscreener";
-  }
-
-  if (url.includes("birdeye.so")) {
-    return "birdeye";
-  }
-
-  return "generic";
-}
-
-function uniqueTokenHints(hints: TokenHint[]) {
-  const seen = new Set<string>();
-
-  return hints.filter((hint) => {
-    const key = `${hint.source}:${hint.symbol ?? ""}:${hint.mint ?? ""}`;
-
-    if (seen.has(key)) {
-      return false;
-    }
-
-    seen.add(key);
-    return true;
-  });
-}
-
-export function extractRawHints(text: string) {
-  return Array.from(
-    new Set(
-      text
-        .toLowerCase()
-        .match(/[a-z0-9]{3,}/g)
-        ?.filter((token) => !HINT_STOP_WORDS.has(token))
-        .slice(0, 5) ?? []
-    )
-  );
-}
-
-export function extractDetectedTokens(url: string, text: string) {
-  const source = detectSource(url);
-  const hints: TokenHint[] = [];
-  const cashtags = Array.from(
-    new Set(Array.from(text.matchAll(/\$([A-Z0-9]{2,10})/g), (match) => match[1]))
-  );
-  const upperSymbols = Array.from(
-    new Set(
-      (text.match(/\b[A-Z]{2,10}\b/g) ?? []).filter((token) => token !== "USD")
-    )
-  );
-  const mintMatch =
-    url.match(/\/solana\/([1-9A-HJ-NP-Za-km-z]{32,44})/) ??
-    text.match(/\b([1-9A-HJ-NP-Za-km-z]{32,44})\b/);
-
-  if (mintMatch?.[1] && source !== "twitter") {
-    hints.push({
-      mint: mintMatch[1],
-      source,
-      confidence: 0.92
-    });
-  }
-
-  for (const symbol of cashtags) {
-    hints.push({
-      symbol,
-      source,
-      confidence: source === "twitter" ? 0.82 : 0.76
-    });
-  }
-
-  for (const symbol of upperSymbols.slice(0, 3)) {
-    hints.push({
-      symbol,
-      source,
-      confidence: source === "generic" ? 0.58 : 0.72
-    });
-  }
-
-  return uniqueTokenHints(hints).slice(0, 3);
+  return Boolean(url && (url.startsWith("http://") || url.startsWith("https://")));  
 }
 
 export function selectCurrentPageContext(
@@ -157,8 +61,7 @@ export async function getCurrentPageContext() {
   const tabScopes = [
     { active: true, currentWindow: true },
     { currentWindow: true },
-    { lastFocusedWindow: true },
-    {}
+    { lastFocusedWindow: true }
   ] as const;
 
   let baseContext: DetectedContextSnapshot | null = null;
@@ -176,25 +79,45 @@ export async function getCurrentPageContext() {
     return null;
   }
 
-  const pageContext = chromeApi.tabs.sendMessage
-    ? await chromeApi.tabs
-        .sendMessage<{
-          type: "context.detected";
+  // 核心优化：统一条用消息名，确信与内容脚本匹配
+  const response = chromeApi.tabs.sendMessage
+    ? await withTimeout(
+        chromeApi.tabs.sendMessage<{
           payload: {
             selectedText?: string;
             rawHints: string[];
             detectedTokens: TokenHint[];
           };
         }>(baseContext.tabId, {
-          type: "context.snapshot.requested"
-        })
-        .catch(() => null)
+          type: "context.request_scan" // 与内容脚本保持一致
+        }),
+        CONTENT_CONTEXT_TIMEOUT_MS
+      ).catch(() => null)
     : null;
 
   return {
     ...baseContext,
-    selectedText: pageContext?.payload.selectedText,
-    rawHints: pageContext?.payload.rawHints ?? baseContext.rawHints,
-    detectedTokens: pageContext?.payload.detectedTokens ?? baseContext.detectedTokens
+    selectedText: response?.payload?.selectedText,
+    rawHints: response?.payload?.rawHints ?? baseContext.rawHints,
+    detectedTokens: response?.payload?.detectedTokens ?? baseContext.detectedTokens
   };
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {        
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error("Content context request timed out"));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
 }

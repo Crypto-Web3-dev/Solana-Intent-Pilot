@@ -13,8 +13,6 @@ describe("ActionCard", () => {
         isSigning={false}
         onConfirm={() => {}}
         onCancel={() => {}}
-        onFailSubmit={() => {}}
-        onSettle={() => {}}
         onOpenNormalPage={() => {}}
       />
     );
@@ -32,8 +30,6 @@ describe("ActionCard", () => {
         isSigning={false}
         onConfirm={() => {}}
         onCancel={() => {}}
-        onFailSubmit={() => {}}
-        onSettle={() => {}}
         onOpenNormalPage={() => {}}
       />
     );
@@ -62,17 +58,16 @@ describe("ActionCard", () => {
         isSigning={false}
         onConfirm={() => {}}
         onCancel={() => {}}
-        onFailSubmit={() => {}}
-        onSettle={() => {}}
         onOpenNormalPage={() => {}}
       />
     );
 
     expect(html).toContain("Execution Preview");
-    expect(html).toContain("Jupiter");
-    expect(html).toContain("100 USDC");
+    expect(html).toContain("Strategy");
+    expect(html).toContain("Min Received");
+    expect(html).toContain("Est. Jito Tip");
     expect(html).toContain("Simulated OK");
-    expect(html).toContain("Confirm &amp; Swap");
+    expect(html).toContain("Execute Atomic Bundle");
     expect(html).toContain("Cancel");
   });
 
@@ -95,13 +90,39 @@ describe("ActionCard", () => {
         isSigning={true}
         onConfirm={() => {}}
         onCancel={() => {}}
-        onFailSubmit={() => {}}
-        onSettle={() => {}}
         onOpenNormalPage={() => {}}
       />
     );
 
-    expect(html).toContain("Sign in Wallet...");
+    expect(html).toContain("Signing...");
+    expect(html).toContain("disabled");
+  });
+
+  it("shows degraded preview warning and disables confirm", () => {
+    const html = renderToString(
+      <ActionCard
+        preview={{
+          requestId: "req-1",
+          routeLabel: "Jupiter",
+          inputAmount: "1 SOL",
+          outputAmount: "100 USDC",
+          slippageBps: 50,
+          estimatedFeeLamports: "5000",
+          simulationSummary: "Live simulation failed. Falling back to a degraded preview path.",
+          swapTransaction: ""
+        }}
+        phase="awaiting-signature"
+        reason={null}
+        walletStatus="ready"
+        isSigning={false}
+        onConfirm={() => {}}
+        onCancel={() => {}}
+        onOpenNormalPage={() => {}}
+      />
+    );
+
+    expect(html).toContain("degraded state");
+    expect(html).toContain("Preview Degraded");
     expect(html).toContain("disabled");
   });
 });

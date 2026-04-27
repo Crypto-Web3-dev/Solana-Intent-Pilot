@@ -21,7 +21,7 @@
   "confidence": 0.96,
   "payload": {
     "inputMint": "So11111111111111111111111111111111111111112",
-    "outputMint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6CwBskjKpP1pPB263",
+    "outputMint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
     "amount": "1000000000",
     "amountMode": "exact",
     "slippageBps": 50,
@@ -85,7 +85,7 @@
   "confidence": 0.42,
   "payload": {
     "inputMint": "So11111111111111111111111111111111111111112",
-    "outputMint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6CwBskjKpP1pPB263",
+    "outputMint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
     "amount": "0",
     "amountMode": "exact",
     "slippageBps": 50,

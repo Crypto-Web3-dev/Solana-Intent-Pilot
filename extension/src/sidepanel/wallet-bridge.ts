@@ -103,26 +103,32 @@ export async function submitViaPageBridge(
 
   console.log("[SIP Bridge] Directly calling wallet via executeScript...");
 
+  // CRITICAL FIX: Ensure the argument is a clean, serializable string.
+  // preview might be a Proxy or have unserializable properties in some environments.
+  const txBase64 = String(preview.swapTransaction || "");
+  if (!txBase64) {
+      throw new Error("Transaction payload is empty or invalid.");
+  }
+
   try {
     const results = await chromeApi.scripting.executeScript({
       target: { tabId: tab.id },
       world: "MAIN",
-      args: [preview.swapTransaction],
-      func: async (base64Transaction: string | null) => {
+      args: [txBase64],
+      func: async (base64Transaction: string) => {
         console.log("[SIP] Injected script started");
         const solana = (window as any).solana;
         const solanaWeb3 = (window as any).solanaWeb3;
 
         if (!solana) return { error: "Wallet not found. Please open Phantom." };
-        if (!base64Transaction) return { error: "Transaction payload is empty." };
         
         try {
           if (solana.connect) await solana.connect();
-          
+
           const actualTaker = solana.publicKey?.toBase58();
           console.log("[SIP] Wallet connected:", actualTaker);
 
-          // 解码 Base64
+          // Decode Base64
           const binaryString = atob(base64Transaction);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
@@ -131,17 +137,14 @@ export async function submitViaPageBridge(
 
           let txToSign: any;
 
-          // 处理 Versioned Transaction
+          // Versioned Transaction Support
           if (solanaWeb3 && solanaWeb3.VersionedTransaction) {
-            console.log("[SIP] Deserializing Versioned Transaction using page library...");
+            console.log("[SIP] Deserializing Versioned Transaction...");
             txToSign = solanaWeb3.VersionedTransaction.deserialize(bytes);
           } else {
-            console.warn("[SIP] solanaWeb3 not found on page. Using Duck-Typing shim...");
-            // 核心修复：如果页面没有 web3 库，我们构造一个伪装对象
-            // 钱包通常只需要调用 .serialize() 即可获得最终字节流
+            console.warn("[SIP] solanaWeb3 not found. Using shim...");
             txToSign = {
               serialize: () => bytes,
-              // 某些钱包可能还会检查这些字段，我们给个空引用
               message: {
                 staticAccountKeys: [],
                 compiledInstructions: [],
@@ -155,10 +158,8 @@ export async function submitViaPageBridge(
             };
           }
 
-          console.log("[SIP] Requesting signature from wallet...");
-          // 对于 Versioned Transaction，通常直接传对象即可
-          const result = await solana.signAndSendTransaction(txToSign);
-          console.log("[SIP] Signature obtained:", result.signature);
+          console.log("[SIP] Requesting signature...");
+          const result = await solana.signAndSendTransaction(txToSign); 
           return { signature: result.signature };
         } catch (e: any) {
           console.error("[SIP] Injected error:", e);
@@ -168,7 +169,7 @@ export async function submitViaPageBridge(
     });
 
     const result = (results.at(0)?.result || {}) as any;
-    
+
     if (result.error) {
       throw new Error(result.error);
     }
@@ -193,7 +194,7 @@ export async function submitWithLifecycle(
   preview: ExecutionPreview,
   preferredTabId?: number,
   options: SubmissionLifecycleOptions = {
-    settlementTimeoutMs: 60_000, // 增加到 60 秒以确保用户有充足时间确认
+    settlementTimeoutMs: 60_000,
     maxRetries: 0
   }
 ): Promise<{ outcome: SubmissionOutcome; signature?: string; explorerUrl?: string; error?: string }> {
@@ -201,7 +202,7 @@ export async function submitWithLifecycle(
     const submission = await Promise.race([
       submitViaPageBridge(requestId, intent, preview, preferredTabId),
       new Promise<never>((_, reject) => {
-        setTimeout(() => { reject(new Error("Timeout: User did not sign the transaction in time.")); }, options.settlementTimeoutMs);
+        setTimeout(() => { reject(new Error("Timeout: User did not sign the transaction in time.")); }, options.settlementTimeoutMs);        
       })
     ]);
 

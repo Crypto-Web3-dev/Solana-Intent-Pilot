@@ -1,133 +1,81 @@
-import type { DetectedContextSnapshot } from "../shared/context";
-import type {
-  ContextDetectedMessage,
-  WalletSubmissionCompletedMessage,
-  WalletSubmissionFailedMessage,
-  WalletSubmissionRequestedMessage
-} from "../shared/messages";
+import type { DetectedContextSnapshot, TokenHint } from "../shared/context";
 
-function readSelectedText() {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-
-  const selectedText = window.getSelection?.()?.toString().trim();
-
-  return selectedText ? selectedText : undefined;
-}
-
-function readDocumentTitle() {
-  if (typeof document === "undefined" || !document.title) {
-    return "Unknown Page";
-  }
-
-  return document.title;
-}
-
-function readLocationHref() {
-  if (typeof window === "undefined" || !window.location.href) {
-    return "https://example.com";
-  }
-
-  return window.location.href;
-}
-
-export function buildMockDetectedContext(): DetectedContextSnapshot {
-  return {
-    tabId: 1,
-    url: readLocationHref(),
-    title: readDocumentTitle(),
-    selectedText: readSelectedText() ?? "buy this token",
-    detectedTokens: [],
-    rawHints: ["example"],
-    detectedAt: new Date().toISOString()
-  };
-}
-
-export function createContextDetectedMessage(): ContextDetectedMessage {
-  return {
-    type: "context.detected",
-    payload: buildMockDetectedContext()
-  };
-}
-
-type ChromeRuntimeLike = {
-  onMessage?: {
-    addListener(
-      listener: (
-        message:
-          | WalletSubmissionRequestedMessage
-          | { type: "context.snapshot.requested" },
-        sender: unknown,
-        sendResponse: (
-          response:
-            | ContextDetectedMessage
-            | WalletSubmissionCompletedMessage
-            | WalletSubmissionFailedMessage
-            | undefined
-        ) => void
-      ) => boolean | void
-    ): void;
-  };
-};
-
-type ChromeApiLike = {
-  runtime?: ChromeRuntimeLike;
-};
-
-type SolanaWallet = {
-  connect?: () => Promise<void>;
-  signAndSendTransaction?: (transaction: unknown) => Promise<{ signature: string }>;
-  signTransaction?: (transaction: unknown) => Promise<unknown>;
-};
-
-type WindowWithSolana = Window & {
-  solana?: SolanaWallet;
-};
-
-async function handleWalletSubmission(
-  message: WalletSubmissionRequestedMessage
-): Promise<WalletSubmissionCompletedMessage | WalletSubmissionFailedMessage> {
-  return new Promise((resolve) => {
-    const handler = (event: MessageEvent) => {
-      if (event.data?.type === "SIP_SIGN_RES") {
-        window.removeEventListener("message", handler);
-        if (event.data.error) {
-          resolve({
-            type: "wallet.submission.failed",
-            payload: { requestId: message.payload.requestId, reason: event.data.error }
-          });
-        } else {
-          resolve({
-            type: "wallet.submission.completed",
-            payload: {
-              requestId: message.payload.requestId,
-              signature: event.data.result.signature,
-              explorerUrl: `https://explorer.solana.com/tx/${event.data.result.signature}`
-            }
-          });
-        }
-      }
-    };
-    window.addEventListener("message", handler);
-    window.postMessage({
-      type: "SIP_SIGN_REQ",
-      transaction: message.payload.preview.swapTransaction
-    }, "*");
-  });
-}
+/**
+ * 增强型环境雷达 (Context Radar) + 钱包桥接注册
+ * 负责在用户浏览任何页面时，静默提取高价值的代币线索
+ */
 
 export function registerWalletBridge() {
-  const chromeApi = (globalThis as typeof globalThis & {
-    chrome?: ChromeApiLike;
-  }).chrome;
+  console.log("[SIP] Wallet Bridge Registered in Content Script");
+}
 
-  chromeApi?.runtime?.onMessage?.addListener((message, _sender, sendResponse) => {
-    if (message?.type === "context.snapshot.requested") {
-      sendResponse(createContextDetectedMessage());
-      return true;
+function getSelectedText(): string {
+  if (typeof window === "undefined") return "";
+  return window.getSelection()?.toString().trim() || "";
+}
+
+function detectTokenHints(url: string, text: string): TokenHint[] {
+  const hints: TokenHint[] = [];
+  
+  // 1. Solana 地址识别 (Base58, 32-44 bytes)
+  const addressRegex = /\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g;
+  const addresses = text.match(addressRegex) || [];
+  
+  // 2. $TICKER 识别
+  const tickerRegex = /\$[A-Z]{2,10}\b/g;
+  const tickers = text.match(tickerRegex) || [];
+
+  const source = url.includes("x.com") ? "twitter" : (url.includes("dexscreener") ? "dexscreener" : "generic");
+
+  Array.from(new Set(addresses)).forEach(addr => {
+      hints.push({ mint: addr, source, confidence: 0.95 });
+  });
+
+  Array.from(new Set(tickers)).forEach(t => {
+      hints.push({ symbol: t.replace("$", ""), source, confidence: 0.85 });
+  });
+
+  return hints.slice(0, 5); // 限制返回数量，防止干扰
+}
+
+function extractRawHints(): string[] {
+  const hints: string[] = [];
+  const metaDesc = document.querySelector('meta[name="description"]')?.getAttribute("content");
+  if (metaDesc) hints.push(metaDesc.substring(0, 100));
+
+  const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute("content");
+  if (ogTitle) hints.push(ogTitle);
+
+  return hints;
+}
+
+export function captureContext(): any {
+  const bodyText = document.body?.innerText || "";
+  // 性能：只扫描前 5000 字符
+  const sampleText = bodyText.substring(0, 5000);
+
+  const hints = detectTokenHints(window.location.href, sampleText);
+  const selectedText = getSelectedText();
+  const rawHints = extractRawHints();
+
+  return {
+    payload: {
+        selectedText: selectedText || undefined,
+        detectedTokens: hints,
+        rawHints: rawHints
     }
+  };
+}
 
-    return false;
+// 监听来自侧边栏的请求
+if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    // 统一消息类型名
+    if (message.type === "context.request_scan" || message.type === "context.snapshot.requested") {
+      sendResponse(captureContext());
+    }
+    return true;
   });
 }
+
+registerWalletBridge();

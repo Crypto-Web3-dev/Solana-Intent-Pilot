@@ -5,18 +5,28 @@ import type { SimulationAdapter } from "../../src/background/simulation-adapter"
 import type { SIPIntent } from "../../src/shared/intent";
 
 const validIntent: SIPIntent = {
-  intent: "SWAP",
-  confidence: 0.92,
-  payload: {
-    inputMint: "So11111111111111111111111111111111111111112",
-    outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    amount: "1000000000",
-    amountMode: "exact",
-    slippageBps: 50,
-    platform: "Jupiter"
-  },
+  intentId: "test-intent-id",
+  actions: [
+    {
+      id: "action-1",
+      type: "SWAP",
+      status: "pending",
+      payload: {
+        inputMint: "So11111111111111111111111111111111111111112",
+        outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        amount: "1000000000",
+        amountMode: "exact",
+        slippageBps: 50,
+        platform: "Jupiter"
+      }
+    }
+  ],
+  mode: "SINGLE",
   metadata: {
+    strategyGoal: "Swap to USDC",
     reasoning: "Swap to USDC",
+    estimatedNetChange: { spend: "1 SOL", receive: "100 USDC" },
+    jitoTipLamports: 1000,
     requiresRiskScan: true,
     sourceContext: ["page-token"],
     needsClarification: false
@@ -38,7 +48,8 @@ describe("policy preview adapter", () => {
     };
     const simulationAdapter: SimulationAdapter = {
       simulate: vi.fn().mockResolvedValue({
-        simulationSummary: "RPC preflight ready at slot 123456"
+        simulationSummary: "RPC preflight ready at slot 123456",
+        success: true
       })
     };
 
@@ -54,5 +65,35 @@ describe("policy preview adapter", () => {
     expect(preview.outputAmount).toBe("250000000");
     expect(preview.swapTransaction).toBe("real-tx-payload");
     expect(preview.simulationSummary).toBe("RPC preflight ready at slot 123456");
+  });
+
+  it("throws when simulation does not produce a signable result", async () => {
+    const quoteAdapter: QuoteAdapter = {
+      getOrder: vi.fn().mockResolvedValue({
+        quote: {
+          inAmount: "1000000000",
+          outAmount: "250000000",
+          signatureFeeLamports: "5000"
+        },
+        swapTransaction: "real-tx-payload"
+      }),
+      executeSwap: vi.fn()
+    };
+    const simulationAdapter: SimulationAdapter = {
+      simulate: vi.fn().mockResolvedValue({
+        simulationSummary: "Simulation provider is not configured.",
+        success: false,
+        error: "simulation-provider-missing"
+      })
+    };
+
+    const adapter = createPolicyPreviewAdapter({
+      quoteAdapter,
+      simulationAdapter
+    });
+
+    await expect(adapter.buildPreview("req-preview-fail", validIntent)).rejects.toThrow(
+      "simulation-provider-missing"
+    );
   });
 });

@@ -7,17 +7,17 @@ type ActionStatus = "pending" | "ready" | "failed";
 type WorkflowState = {
   requestId: string;
   phase: WorkflowPhase;
-  reason?: WorkflowReason;
+  reason?: WorkflowReason | string;
   actionStates?: Record<string, ActionStatus>;
 };
 
 export function isTerminalPhase(phase: WorkflowPhase) {
-  return phase === "blocked" || phase === "failed";
+  return phase === "blocked" || phase === "failed" || phase === "confirmed";
 }
 
 export function createWorkflowEngine() {
   const states = new Map<string, WorkflowState>();
-  const stickyIdleReasons = new Set<WorkflowReason>([
+  const stickyIdleReasons = new Set<WorkflowReason | string>([
     "intent-invalid",
     "clarification-required"
   ]);
@@ -25,105 +25,36 @@ export function createWorkflowEngine() {
   function setState(
     requestId: string,
     phase: WorkflowPhase,
-    reason?: WorkflowReason,
+    reason?: WorkflowReason | string,
     actionStates?: Record<string, ActionStatus>
   ) {
     const currentState = states.get(requestId);
+    const finalActionStates = actionStates ?? currentState?.actionStates;
+
     states.set(requestId, {
       requestId,
       phase,
-      reason,
-      actionStates: actionStates ?? currentState?.actionStates
+      reason: reason ?? (phase === currentState?.phase ? currentState?.reason : undefined),
+      actionStates: finalActionStates
     });
   }
 
   function currentPhase(requestId: string) {
-    const currentState = states.get(requestId);
-
-    return currentState?.phase;
-  }
-
-  function clearState(requestId: string) {
-    states.delete(requestId);
-  }
-
-  function isStickyIdleResolution(requestId: string) {
-    const currentState = states.get(requestId);
-
-    return (
-      currentState?.phase === "idle" &&
-      currentState.reason !== undefined &&
-      stickyIdleReasons.has(currentState.reason)
-    );
-  }
-
-  function handleSimulationReady(requestId: string) {
-    if (currentPhase(requestId) !== "simulating") {
-      return;
-    }
-
-    setState(requestId, "awaiting-signature");
-  }
-
-  function handlePreviewReady(requestId: string) {
-    // Keep the older preview name as a boring alias for the simulation-ready transition.
-    handleSimulationReady(requestId);
-  }
-
-  function handleExecutionConfirmed(requestId: string) {
-    if (currentPhase(requestId) !== "awaiting-signature") {
-      return;
-    }
-
-    setState(requestId, "submitting");
-  }
-
-  function handleExecutionCancelled(requestId: string) {
-    if (currentPhase(requestId) !== "awaiting-signature") {
-      return;
-    }
-
-    setState(requestId, "idle", "signature-cancelled");
-  }
-
-  function handleTransactionSubmitted(requestId: string) {
-    if (currentPhase(requestId) !== "submitting") {
-      return;
-    }
-
-    setState(requestId, "submitting");
-  }
-
-  function handleTransactionSettled(requestId: string) {
-    if (currentPhase(requestId) !== "submitting") {
-      return;
-    }
-
-    setState(requestId, "confirmed", "confirmed");
-  }
-
-  function handleSubmitFailed(requestId: string) {
-    if (currentPhase(requestId) !== "submitting") {
-      return;
-    }
-
-    setState(requestId, "failed", "submit-failed");
+    return states.get(requestId)?.phase;
   }
 
   return {
     start(requestId: string) {
-      if (isStickyIdleResolution(requestId)) {
+      const currentState = states.get(requestId);
+      if (currentState?.phase === "idle" && currentState.reason && stickyIdleReasons.has(currentState.reason)) {
         return;
       }
-
       setState(requestId, "parsing");
     },
     handleParsedIntent(requestId: string, intent: SIPIntent) {
-      if (currentPhase(requestId) !== "parsing") {
-        return;
-      }
+      const phase = currentPhase(requestId);
+      if (phase !== "parsing" && phase !== "idle" && phase !== undefined) return;    
 
-      // 验证是否有动作
       if (!intent.actions || intent.actions.length === 0) {
         setState(requestId, "idle", "intent-invalid");
         return;
@@ -134,10 +65,9 @@ export function createWorkflowEngine() {
         return;
       }
 
-      // 初始化动作状态
       const actionStates: Record<string, ActionStatus> = {};
-      intent.actions.forEach((action) => {
-        actionStates[action.id] = "pending";
+      intent.actions.forEach((a) => {
+        actionStates[a.id] = "pending";
       });
 
       setState(
@@ -148,25 +78,20 @@ export function createWorkflowEngine() {
       );
     },
     handleRiskReport(requestId: string, report: SecurityReport) {
-      if (currentPhase(requestId) !== "risk-checking") {
-        return;
-      }
+      if (currentPhase(requestId) !== "risk-checking") return;
 
       if (report.blocking) {
         setState(requestId, "blocked", "risk-blocked");
-        return;
+      } else {
+        setState(requestId, "quoting");
       }
-
-      setState(requestId, "quoting");
     },
     handleActionReady(requestId: string, actionId: string) {
       const state = states.get(requestId);
       if (!state || !state.actionStates) return;
 
       const newActionStates = { ...state.actionStates, [actionId]: "ready" as const };
-      
-      // 检查是否所有动作都已就绪
-      const allReady = Object.values(newActionStates).every((s) => s === "ready");
+      const allReady = Object.values(newActionStates).every((s) => s === "ready");   
 
       if (allReady && state.phase === "quoting") {
         setState(requestId, "simulating", undefined, newActionStates);
@@ -182,39 +107,61 @@ export function createWorkflowEngine() {
       setState(requestId, "failed", "quote-failed", newActionStates);
     },
     handleQuoteReady(requestId: string) {
-      if (currentPhase(requestId) !== "quoting") {
-        return;
+      if (currentPhase(requestId) === "quoting") {
+        setState(requestId, "simulating");
       }
-
-      setState(requestId, "simulating");
     },
-    handleSimulationReady,
-    handlePreviewReady,
-    handleExecutionConfirmed,
-    handleExecutionCancelled,
-    handleTransactionSubmitted,
-    handleTransactionSettled,
-    handleSubmitFailed,
-    handleFailure(requestId: string, reason: WorkflowReason) {
-      const phase = currentPhase(requestId);
-
-      if (
-        phase !== "parsing" &&
-        phase !== "risk-checking" &&
-        phase !== "quoting" &&
-        phase !== "simulating" &&
-        phase !== "submitting"
-      ) {
-        return;
+    handleSimulationReady(requestId: string) {
+      if (currentPhase(requestId) === "simulating") {
+        setState(requestId, "awaiting-signature");
       }
-
-      setState(requestId, "failed", reason);
+    },
+    handlePreviewReady(requestId: string) {
+      const phase = currentPhase(requestId);
+      if (phase === "simulating") {
+        setState(requestId, "awaiting-signature");
+      }
+    },
+    handleExecutionConfirmed(requestId: string) {
+      if (currentPhase(requestId) === "awaiting-signature") {
+        setState(requestId, "submitting");
+      }
+    },
+    handleExecutionCancelled(requestId: string) {
+      // 核心修复：允许随时取消并标记为失败状态
+      setState(requestId, "failed", "Signature cancelled by user.");
+    },
+    handleRetrySignature(requestId: string) {
+      const currentState = states.get(requestId);
+      if (currentState?.phase === "failed" || currentState?.phase === "idle") {
+        setState(requestId, "awaiting-signature");
+      }
+    },
+    handleTransactionSubmitted(requestId: string) {
+      // submitting
+    },
+    handleTransactionSettled(requestId: string) {
+      if (currentPhase(requestId) === "submitting") {
+        setState(requestId, "confirmed", "confirmed");
+      }
+    },
+    handleSubmitFailed(requestId: string) {
+      if (currentPhase(requestId) === "submitting") {
+        setState(requestId, "failed", "submit-failed");
+      }
+    },
+    handleFailure(requestId: string, reason: WorkflowReason | string) {
+      const phase = currentPhase(requestId);
+      // 核心修复：允许从“待签名”等状态直接进入失败
+      if (phase && !isTerminalPhase(phase)) {      
+        setState(requestId, "failed", reason);
+      }
     },
     getState(requestId: string) {
       return states.get(requestId);
     },
     clearState(requestId: string) {
-      clearState(requestId);
+      states.delete(requestId);
     }
   };
 }

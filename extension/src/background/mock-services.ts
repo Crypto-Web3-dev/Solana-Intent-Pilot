@@ -9,20 +9,30 @@ function createMockSwapIntent(options?: {
   confidence?: number;
 }): SIPIntent {
   return {
-    intent: "SWAP",
-    confidence: options?.confidence ?? 0.92,
-    payload: {
-      inputMint: "So11111111111111111111111111111111111111112",
-      outputMint:
-        options?.outputMint ?? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-      amount: options?.needsClarification ? "0" : "1000000000",
-      amountMode: "exact",
-      slippageBps: 50,
-      platform: "Jupiter"
-    },
+    intentId: "mock-intent-id",
+    actions: [
+      {
+        id: "action-1",
+        type: "SWAP",
+        status: "pending",
+        payload: {
+          inputMint: "So11111111111111111111111111111111111111112",
+          outputMint:
+            options?.outputMint ?? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          amount: options?.needsClarification ? "0" : "1000000000",
+          amountMode: "exact",
+          slippageBps: 50,
+          platform: "Jupiter"
+        }
+      }
+    ],
+    mode: "SINGLE",
     metadata: {
+      strategyGoal: options?.needsClarification ? "Clarification Required" : "Swap to USDC",
       reasoning: options?.needsClarification ? "Need clarification" : "Swap to USDC",
-      requiresRiskScan: options?.requiresRiskScan ?? true,
+      estimatedNetChange: { spend: "1 SOL", receive: "100 USDC" },
+      jitoTipLamports: 1000,
+      requiresRiskScan: options?.requiresRiskScan !== undefined ? options.requiresRiskScan : true,
       sourceContext: ["page-token"],
       needsClarification: options?.needsClarification ?? false
     }
@@ -31,17 +41,25 @@ function createMockSwapIntent(options?: {
 
 function createMockTransferIntent(): SIPIntent {
   return {
-    intent: "TRANSFER",
-    confidence: 0.72,
-    payload: {
-      inputMint: "So11111111111111111111111111111111111111112",
-      outputMint: "So11111111111111111111111111111111111111112",
-      amount: "1000000000",
-      amountMode: "exact",
-      slippageBps: 0,
-      platform: "Wallet"
-    },
+    intentId: "mock-transfer-id",
+    actions: [
+      {
+        id: "action-1",
+        type: "TRANSFER",
+        status: "pending",
+        payload: {
+          inputMint: "So11111111111111111111111111111111111111112",
+          outputMint: "So11111111111111111111111111111111111111112",
+          amount: "1000000000",
+          amountMode: "exact",
+          slippageBps: 0,
+          platform: "Wallet"
+        }
+      }
+    ],
+    mode: "SINGLE",
     metadata: {
+      strategyGoal: "Transfer Tokens",
       reasoning: "Transfer intent for router coverage",
       requiresRiskScan: false,
       sourceContext: ["page-token"],
@@ -90,11 +108,13 @@ export async function mockParseIntent(input: string): Promise<SIPIntent> {
 }
 
 export async function mockRiskScan(intent: SIPIntent): Promise<SecurityReport> {
-  if (intent.payload.outputMint.includes("risk-fail")) {
+  const outputMint = intent.actions?.[0]?.payload?.outputMint || "";
+  
+  if (outputMint.includes("risk-fail")) {
     throw new Error("Risk scan unavailable");
   }
 
-  if (intent.payload.outputMint.includes("blocked")) {
+  if (outputMint.includes("blocked")) {
     return {
       source: "policy-fallback",
       score: 10,

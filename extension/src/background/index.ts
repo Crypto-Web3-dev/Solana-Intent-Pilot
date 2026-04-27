@@ -20,6 +20,7 @@ type ChromeRuntimeApi = {
       ) => boolean | void
     ): void;
   };
+  sendMessage(message: any): Promise<any>;
 };
 
 type ChromeActionApi = {
@@ -64,31 +65,53 @@ chromeApi?.action?.onClicked.addListener((tab) => {
   openSidePanelForTab(tab.id);
 });
 
-// --- 核心业务流初始化 ---
+// --- Service Initialization ---
+const useMockRuntime = process.env.NODE_ENV === "test";
 
-// 根据环境变量使用生产服务，如果没有配置环境变量则回退到 Mock 服务
-const useMock = !process.env.JUPITER_API_BASE && !process.env.OPENAI_API_KEY;
+if (useMockRuntime) {
+  console.warn("Using mock runtime services in test mode.");
+}
 
-const services = useMock
+const services = useMockRuntime
   ? createMockRuntimeServices()
   : createProductionRuntimeServices({
-      jupiterBaseUrl: process.env.JUPITER_API_BASE
+      jupiterBaseUrl: process.env.JUPITER_API_BASE,
+      jupiterApiKey: process.env.PLASMO_PUBLIC_JUPITER_API_KEY,
+      rpcUrl: process.env.PLASMO_PUBLIC_SOLANA_RPC_URL
     });
 
-const router = createMessageRouter(undefined, services);
+// 核心优化：在创建 Router 时注入广播回调，利用 chrome.runtime.sendMessage 推送实时事件
+const router = createMessageRouter(undefined, services, (event) => {
+  chromeApi?.runtime.sendMessage(event).catch(() => {
+    // 静默忽略没有监听者的消息推送
+  });
+});
 
-// 监听并处理来自 UI 的消息
-chromeApi?.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+// --- Message Handling ---
+chromeApi?.runtime.onMessage.addListener((message, _sender, sendResponse) => {  
   const req = message as SIPRuntimeMessage;
-  
+
   if (!req || typeof req.type !== "string") {
     return false;
   }
 
-  // 路由消息
   if (req.type === "intent.parse.requested") {
-    router.handleIntentRequest(req).then(sendResponse).catch(console.error);
-    return true; // 保持异步通道开启
+    router.handleIntentRequest(req).then(sendResponse).catch(error => {
+        console.error("Router error:", error);
+        sendResponse([]);
+    });
+    return true;
+  }
+
+  if (req.type === "execution.cancel_requested") {
+    sendResponse(router.handleCancelRequested(req));
+    return false;
+  }
+
+  // 新增：处理签名重试请求
+  if (req.type === "execution.retry_requested") {
+    sendResponse(router.handleRetryRequested(req));
+    return false;
   }
 
   if (req.type === "execution.confirmed") {
@@ -100,12 +123,12 @@ chromeApi?.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse(router.handleExecutionCancelled(req));
     return false;
   }
-  
+
   if (req.type === "transaction.submitted") {
     sendResponse(router.handleTransactionSubmitted(req));
     return false;
   }
-  
+
   if (req.type === "transaction.failed") {
     sendResponse(router.handleTransactionFailed(req));
     return false;
@@ -118,4 +141,3 @@ chromeApi?.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   return false;
 });
-

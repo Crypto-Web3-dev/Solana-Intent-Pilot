@@ -5,7 +5,7 @@
 SIP 的消息流需要解决三件事：
 
 - 在 Chrome 扩展多个运行上下文之间稳定同步状态
-- 让页面感知、AI 推理、风险校验和执行流程可串联
+- 让页面感知、意图推理、风险校验和执行流程可串联
 - 避免让 UI 直接依赖复杂异步逻辑或外部接口细节
 
 ## 2. 运行上下文
@@ -24,29 +24,11 @@ SIP 的主要消息参与方如下：
 ### 3.1 页面感知消息
 
 ```ts
-type DetectedContextMessage = {
+type ContextDetectedMessage = {
   type: "context.detected";
-  payload: {
-    tabId: number;
-    url: string;
-    title: string;
-    selectedText?: string;
-    detectedTokens: Array<{
-      symbol?: string;
-      mint?: string;
-      source: "twitter" | "birdeye" | "dexscreener" | "generic";
-      confidence: number;
-    }>;
-    rawHints: string[];
-    detectedAt: string;
-  };
+  payload: DetectedContextSnapshot;
 };
 ```
-
-用途：
-
-- 从 Content Script 发送到 Background
-- 再由 Background 广播给 Side Panel
 
 ### 3.2 用户意图请求消息
 
@@ -58,14 +40,10 @@ type IntentParseRequestedMessage = {
     tabId: number;
     userInput: string;
     contextSnapshot: DetectedContextSnapshot;
+    userPublicKey?: string;
   };
 };
 ```
-
-用途：
-
-- 从 Side Panel 发起
-- 由 Background 统一处理，并在内部调用 AI service
 
 ### 3.3 风险扫描请求消息
 
@@ -75,26 +53,22 @@ type RiskScanRequestedMessage = {
   payload: {
     requestId: string;
     mintAddress: string;
-    accountDataBase64?: string;
-    sourceIntent: SIPIntent["payload"];
+    sourceAction: SIPAction;
   };
 };
 ```
+
+说明：
+
+- 当前风险扫描请求按动作边界携带最小可信输入
+- 不再假设存在顶层 `SIPIntent.payload`
 
 ### 3.4 执行预览消息
 
 ```ts
 type ExecutionPreviewReadyMessage = {
   type: "execution.preview.ready";
-  payload: {
-    requestId: string;
-    routeLabel: string;
-    inputAmount: string;
-    outputAmount: string;
-    slippageBps: number;
-    estimatedFeeLamports: string;
-    simulationSummary?: string;
-  };
+  payload: ExecutionPreview;
 };
 ```
 
@@ -105,18 +79,7 @@ type WorkflowStateMessage = {
   type: "workflow.state.changed";
   payload: {
     requestId: string;
-    phase:
-      | "idle"
-      | "detecting"
-      | "parsing"
-      | "risk-checking"
-      | "quoting"
-      | "simulating"
-      | "awaiting-signature"
-      | "submitting"
-      | "confirmed"
-      | "failed"
-      | "blocked";
+    phase: WorkflowPhase;
     reason?: WorkflowReason | string;
   };
 };
@@ -133,19 +96,38 @@ type WorkflowStateMessage = {
 ### 4.2 意图执行流程
 
 1. Side Panel 发送 `intent.parse.requested`
-2. Background 调用 LLM service
-3. LLM 返回 Intent 后发出 `workflow.state.changed(parsing -> risk-checking)`
-4. Background 发出 `risk.scan.requested`
-5. 风险扫描完成后，如果通过则进入报价与模拟阶段
-6. 生成 `execution.preview.ready`
-7. 用户确认后进入签名和提交状态
+2. Background 解析用户输入并生成 `SIPIntent`
+3. `SIPIntent` 以 `intentId + actions[] + mode + metadata` 结构在系统内流转
+4. 若 `needsClarification = true`，Background 回到 `idle` 并保留澄清信息
+5. 若需要风险扫描，Background 基于相关动作发出 `risk.scan.requested`
+6. 风险通过后进入报价与模拟阶段
+7. 生成 `execution.preview.ready`
+8. 只有当预览满足签名前最小可解释条件时，状态才进入 `awaiting-signature`
+9. 用户确认后进入签名和提交状态
 
-### 4.3 错误和阻断流程
+### 4.3 Bundle 请求
 
-- LLM 输出不合法：进入 `failed`
+当 `mode = "ATOMIC_BUNDLE"` 时：
+
+- 多个 `SIPAction` 共享同一个 `requestId`
+- `background` 仍然是唯一工作流编排者
+- 所有动作都拿到中间执行产物，并不自动等于“可以签名”
+- 只有当前请求拥有一致的 bundle 预览结果后，才允许进入 `awaiting-signature`
+
+### 4.4 错误、阻断和降级流程
+
+- Intent 结构不合法：进入 `failed`
+- 需要澄清：回到 `idle`，但保留澄清信息
 - 风险过高：进入 `blocked`
-- 报价失败或 RPC 拥堵：进入 `failed`，附带 fallback 提示
+- quote 或 simulate 失败：进入 `failed` 或显式降级路径
+- 显式 fallback 允许存在，但不得伪装成已验证成功
 - 用户取消签名：回退到 `idle` 或保留最近预览
+
+生产约束：
+
+- 默认解析链在生产环境不得于 LLM 失败后回退到 mock intent
+- 默认钱包提交流程在生产环境不得于缺失 wallet provider 时回退到 mock wallet
+- 默认 bundle simulation 在生产环境不得于失败后回退到 mock-success
 
 ## 5. 设计原则
 
@@ -153,6 +135,7 @@ type WorkflowStateMessage = {
 - Side Panel 只消费状态和结果，不直接持有底层执行逻辑
 - Background 是主编排层，减少多个页面上下文各自请求外部服务
 - 消息 payload 尽量使用可序列化纯数据，避免传递复杂对象引用
+- `actions / bundle` 是当前消息流设计的权威模型
 
 ## 6. 推荐共享类型文件
 

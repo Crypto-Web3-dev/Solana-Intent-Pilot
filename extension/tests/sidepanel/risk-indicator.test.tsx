@@ -21,5 +21,6 @@ describe("RiskIndicator", () => {
     expect(html).toContain("UNKNOWN");
     expect(html).toContain("Insufficient data");
     expect(html).toContain("Heuristic Policy");
+    expect(html).toContain("not a verified safe result");
   });
 });
