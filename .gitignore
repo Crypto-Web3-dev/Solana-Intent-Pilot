@@ -1,16 +1,21 @@
+.codex/
 .pnpm-store/
 .worktrees/
 worktrees/
 
-extension/node_modules/
-extension/build/
 extension/.plasmo/
+extension/build/
+extension/node_modules/
 extension/user-data/
+extension/.env
 
-risk-engine/target/
-
-.codex/
 learn/
 openspec/
+
+risk-engine/pkg/
+risk-engine/target/
+
 .env
-extension/.env
+AGENTS.md
+GEMINI.md
+
