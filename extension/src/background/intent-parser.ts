@@ -1,12 +1,14 @@
 import type { DetectedContextSnapshot } from "../shared/context";
 import type { SIPIntent } from "../shared/intent";
 import { createOpenAIIntentParser } from "./openai-intent-parser";
+import { enrichDetectedContext } from "./token-context-enricher";
 import { mockParseIntent } from "./mock-services";
 
 export interface IntentParser {
   parseIntent(
     userInput: string,
-    context?: DetectedContextSnapshot
+    context?: DetectedContextSnapshot,
+    userPublicKey?: string
   ): Promise<SIPIntent>;
 }
 
@@ -18,12 +20,24 @@ export function createMockIntentParser(): IntentParser {
   };
 }
 
-export function createDefaultIntentParser(): IntentParser {
+export function createDefaultIntentParser(options?: {
+  jupiterApiKey?: string;
+}): IntentParser {
   const openAIParser = createOpenAIIntentParser();
 
   return {
-    async parseIntent(userInput: string, context?: DetectedContextSnapshot) {
-      return openAIParser.parseIntent(userInput, context);
+    async parseIntent(
+      userInput: string,
+      context?: DetectedContextSnapshot,
+      userPublicKey?: string
+    ) {
+      const enrichedContext = context
+        ? await enrichDetectedContext(context, {
+            jupiterApiKey: options?.jupiterApiKey
+          }).catch(() => context)
+        : context;
+
+      return openAIParser.parseIntent(userInput, enrichedContext, userPublicKey);
     }
   };
 }

@@ -22,11 +22,37 @@ type TokenMetadata = {
   verificationSource: "jupiter" | "solscan";
 };
 
+function getDefaultFetch(): TokenVerificationFetch | undefined {
+  return globalThis.fetch?.bind(globalThis);
+}
+
+const metadataByMint = new Map<string, TokenMetadata>();
+const metadataBySymbol = new Map<string, TokenMetadata>();
+
+export function clearTokenContextMetadataCache() {
+  metadataByMint.clear();
+  metadataBySymbol.clear();
+}
+
+function rememberTokenMetadata(metadata: TokenMetadata | null | undefined) {
+  if (!metadata) return;
+  if (metadata.mint) metadataByMint.set(metadata.mint, metadata);
+  if (metadata.symbol) metadataBySymbol.set(metadata.symbol.toUpperCase(), metadata);
+}
+
+function readCachedMintMetadata(mint: string) {
+  return metadataByMint.get(mint) ?? null;
+}
+
+function readCachedSymbolMetadata(symbol: string) {
+  return metadataBySymbol.get(symbol.trim().toUpperCase()) ?? null;
+}
+
 export async function enrichDetectedContext(
   context: DetectedContextSnapshot,
   options: TokenContextEnricherOptions = {}
 ): Promise<DetectedContextSnapshot> {
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const fetchImpl = options.fetchImpl ?? getDefaultFetch();
   const maxMintChecks = options.maxMintChecks ?? 8;
 
   if (!fetchImpl) return context;
@@ -41,26 +67,25 @@ export async function enrichDetectedContext(
         continue;
       }
 
+      const cachedMetadata = readCachedSymbolMetadata(token.symbol);
+      if (cachedMetadata) {
+        enrichedTokens.push(
+          mergeTokenWithMetadata(token, cachedMetadata, 0.9)
+        );
+        continue;
+      }
+
       checkedMints += 1;
       const metadata = await verifyJupiterTokenSymbol(
         token.symbol,
         fetchImpl,
         options.jupiterApiKey
       ).catch(() => null);
+      rememberTokenMetadata(metadata);
 
       enrichedTokens.push(
         metadata
-          ? {
-              ...token,
-              mint: metadata.mint,
-              name: metadata.name ?? token.name,
-              symbol: metadata.symbol ?? token.symbol,
-              decimals: metadata.decimals ?? token.decimals,
-              icon: metadata.icon ?? token.icon,
-              confidence: Math.max(token.confidence, 0.9),
-              verified: true,
-              verificationSource: metadata.verificationSource
-            }
+          ? mergeTokenWithMetadata(token, metadata, 0.9)
           : token
       );
       continue;
@@ -74,6 +99,14 @@ export async function enrichDetectedContext(
       continue;
     }
 
+    const cachedMetadata = readCachedMintMetadata(token.mint);
+    if (cachedMetadata) {
+      enrichedTokens.push(
+        mergeTokenWithMetadata(token, cachedMetadata, 0.92)
+      );
+      continue;
+    }
+
     checkedMints += 1;
     const metadata = await verifyTokenMint(token.mint, {
       fetchImpl,
@@ -82,22 +115,32 @@ export async function enrichDetectedContext(
     if (!metadata) {
       continue;
     }
+    rememberTokenMetadata(metadata);
 
-    enrichedTokens.push({
-      ...token,
-      name: metadata.name ?? token.name,
-      symbol: metadata.symbol ?? token.symbol,
-      decimals: metadata.decimals ?? token.decimals,
-      icon: metadata.icon ?? token.icon,
-      confidence: Math.max(token.confidence, 0.92),
-      verified: true,
-      verificationSource: metadata.verificationSource
-    });
+    enrichedTokens.push(mergeTokenWithMetadata(token, metadata, 0.92));
   }
 
   return {
     ...context,
     detectedTokens: mergeTokenHints(enrichedTokens)
+  };
+}
+
+function mergeTokenWithMetadata(
+  token: TokenHint,
+  metadata: TokenMetadata,
+  confidenceFloor: number
+): TokenHint {
+  return {
+    ...token,
+    mint: metadata.mint ?? token.mint,
+    name: metadata.name ?? token.name,
+    symbol: metadata.symbol ?? token.symbol,
+    decimals: metadata.decimals ?? token.decimals,
+    icon: metadata.icon ?? token.icon,
+    confidence: Math.max(token.confidence, confidenceFloor),
+    verified: true,
+    verificationSource: metadata.verificationSource
   };
 }
 
@@ -108,7 +151,7 @@ export async function verifyTokenMint(
     jupiterApiKey?: string;
   } = {}
 ): Promise<TokenMetadata | null> {
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const fetchImpl = options.fetchImpl ?? getDefaultFetch();
   if (!fetchImpl) return null;
 
   const jupiterMetadata = await verifyJupiterToken(
@@ -123,7 +166,7 @@ export async function verifyTokenMint(
 
 export async function verifyJupiterToken(
   mint: string,
-  fetchImpl: TokenVerificationFetch = globalThis.fetch,
+  fetchImpl: TokenVerificationFetch = getDefaultFetch() as TokenVerificationFetch,
   apiKey?: string
 ): Promise<TokenMetadata | null> {
   if (!SOLANA_ADDRESS_PATTERN.test(mint)) return null;
@@ -157,7 +200,7 @@ export async function verifyJupiterToken(
 
 export async function verifyJupiterTokenSymbol(
   symbol: string,
-  fetchImpl: TokenVerificationFetch = globalThis.fetch,
+  fetchImpl: TokenVerificationFetch = getDefaultFetch() as TokenVerificationFetch,
   apiKey?: string
 ): Promise<TokenMetadata | null> {
   const normalizedSymbol = symbol.trim().toUpperCase();
@@ -196,7 +239,7 @@ export async function verifyJupiterTokenSymbol(
 
 export async function verifySolscanToken(
   mint: string,
-  fetchImpl: TokenVerificationFetch = globalThis.fetch
+  fetchImpl: TokenVerificationFetch = getDefaultFetch() as TokenVerificationFetch
 ): Promise<TokenMetadata | null> {
   if (!SOLANA_ADDRESS_PATTERN.test(mint)) return null;
 

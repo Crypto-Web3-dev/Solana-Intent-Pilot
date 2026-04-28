@@ -33,7 +33,7 @@ describe("default quote adapter", () => {
       })
     });
 
-    const adapter = createDefaultQuoteAdapter({ fetchImpl });
+    const adapter = createDefaultQuoteAdapter({ fetchImpl, apiKey: "jup-test-key" });
     const result = await adapter.getOrder(validAction);
 
     expect(result.quote.inAmount).toBe("1000000000");
@@ -52,7 +52,7 @@ describe("default quote adapter", () => {
       })
     });
 
-    const adapter = createJupiterQuoteAdapter({ fetchImpl });
+    const adapter = createJupiterQuoteAdapter({ fetchImpl, apiKey: "jup-test-key" });
 
     await adapter.getOrder({
       ...validAction,
@@ -68,6 +68,61 @@ describe("default quote adapter", () => {
     expect(url.searchParams.get("amount")).toBe("100000000");
   });
 
+  it("sends the Jupiter API key header and taker on order requests", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        inAmount: "1000000000",
+        outAmount: "250000000",
+        transaction: "real-tx-data"
+      })
+    });
+
+    const adapter = createJupiterQuoteAdapter({
+      fetchImpl,
+      apiKey: "jup-test-key"
+    });
+
+    await adapter.getOrder(validAction);
+
+    const [requestUrl, requestOptions] = fetchImpl.mock.calls[0];
+    const url = new URL(requestUrl);
+    expect(url.searchParams.get("taker")).toBe(validAction.payload.userPublicKey);
+    expect(requestOptions.headers["x-api-key"]).toBe("jup-test-key");
+  });
+
+  it("fails before calling Jupiter when an order request has no taker", async () => {
+    const fetchImpl = vi.fn();
+    const adapter = createJupiterQuoteAdapter({
+      fetchImpl,
+      apiKey: "jup-test-key"
+    });
+
+    await expect(
+      adapter.getOrder({
+        ...validAction,
+        payload: {
+          ...validAction.payload,
+          userPublicKey: undefined
+        }
+      })
+    ).rejects.toThrow("Jupiter order request requires a taker wallet public key");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("fails before calling Jupiter when the API key is missing", async () => {
+    const fetchImpl = vi.fn();
+    const adapter = createJupiterQuoteAdapter({
+      fetchImpl,
+      apiKey: ""
+    });
+
+    await expect(adapter.getOrder(validAction)).rejects.toThrow(
+      "Jupiter order request requires PLASMO_PUBLIC_JUPITER_API_KEY"
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("throws an error when Jupiter fetch fails and no fallback is provided", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error("network down"));
     // Provide a null-like or explicitly failing fallback to avoid the default mock success
@@ -75,7 +130,11 @@ describe("default quote adapter", () => {
         getOrder: () => Promise.reject(new Error("network down")),
         executeSwap: () => Promise.reject(new Error("network down"))
     };
-    const adapter = createDefaultQuoteAdapter({ fetchImpl, fallbackAdapter });
+    const adapter = createDefaultQuoteAdapter({
+      fetchImpl,
+      fallbackAdapter,
+      apiKey: "jup-test-key"
+    });
 
     await expect(adapter.getOrder(validAction)).rejects.toThrow("network down");
   });
@@ -93,7 +152,11 @@ describe("default quote adapter", () => {
       executeSwap: vi.fn()
     };
 
-    const adapter = createDefaultQuoteAdapter({ fetchImpl, fallbackAdapter });
+    const adapter = createDefaultQuoteAdapter({
+      fetchImpl,
+      fallbackAdapter,
+      apiKey: "jup-test-key"
+    });
     await expect(adapter.getOrder(validAction)).rejects.toThrow("invalid");
   });
 });

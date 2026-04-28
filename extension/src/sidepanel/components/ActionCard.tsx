@@ -1,11 +1,13 @@
 import type { ExecutionPreview } from "../../shared/execution";
 import type { ClarificationPayload, SIPIntent } from "../../shared/intent";
+import type { SecurityReport } from "../../shared/risk";
 import type { WorkflowPhase, WorkflowReason } from "../../shared/workflow";
 import type { WalletStatus } from "../wallet-state";
 
 export function ActionCard({
   preview,
   intent,
+  risk,
   phase,
   reason,
   clarification,
@@ -20,6 +22,7 @@ export function ActionCard({
 }: {
   preview: ExecutionPreview | null;
   intent: SIPIntent | null;
+  risk?: SecurityReport | null;
   phase: WorkflowPhase;
   reason: WorkflowReason | string | null;
   clarification?: ClarificationPayload | null;
@@ -65,6 +68,61 @@ export function ActionCard({
     formatted = formatted.replace("Simulation Logic Failed:", "Failed:");
     
     return formatted;
+  };
+
+  const getRiskConfirmation = () => {
+    if (!risk) {
+      return {
+        title: "Risk checks pending",
+        detail: "Confirm only after reviewing the execution preview.",
+        button: "Confirm & Continue",
+        color: "#94a3b8",
+        background: "rgba(148, 163, 184, 0.08)",
+        border: "rgba(148, 163, 184, 0.2)"
+      };
+    }
+
+    if (risk.level === "high") {
+      return {
+        title: "High risk warning",
+        detail: "Serious risk signals were detected. Review the checks above before choosing to continue.",
+        button: "Confirm High Risk & Continue",
+        color: "#f87171",
+        background: "rgba(239, 68, 68, 0.08)",
+        border: "rgba(239, 68, 68, 0.24)"
+      };
+    }
+
+    if (risk.level === "medium") {
+      return {
+        title: "Medium risk warning",
+        detail: "Some risk signals were detected. Continue only if this matches your intent.",
+        button: "Review Risk & Continue",
+        color: "#fbbf24",
+        background: "rgba(251, 191, 36, 0.08)",
+        border: "rgba(251, 191, 36, 0.24)"
+      };
+    }
+
+    if (risk.level === "unknown") {
+      return {
+        title: "Incomplete risk data",
+        detail: "SIP could not verify all risk inputs. This is not a safe result.",
+        button: "Acknowledge Risk & Continue",
+        color: "#fbbf24",
+        background: "rgba(251, 191, 36, 0.08)",
+        border: "rgba(251, 191, 36, 0.24)"
+      };
+    }
+
+    return {
+      title: "Low risk checks passed",
+      detail: "No major risk signals were detected by the current checks.",
+      button: "Confirm & Continue",
+      color: "#10b981",
+      background: "rgba(16, 185, 129, 0.08)",
+      border: "rgba(16, 185, 129, 0.22)"
+    };
   };
 
   const getDecimals = (symbol?: string, explicitDecimals?: number) => {
@@ -145,6 +203,7 @@ export function ActionCard({
   const outputSymbol = intent?.actions?.[0]?.payload?.outputSymbol || "Tokens";
   const inputDecimals = intent?.actions?.[0]?.payload?.inputDecimals;
   const outputDecimals = intent?.actions?.[0]?.payload?.outputDecimals;
+  const riskConfirmation = getRiskConfirmation();
 
   return (
     <div style={{ padding: 16, border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: 16, background: "rgba(255, 255, 255, 0.03)" }}>
@@ -212,29 +271,44 @@ export function ActionCard({
       )}
 
       {phase === "awaiting-signature" && (
-        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-          <button
-            onClick={onConfirm}
-            disabled={isSigning || isDegradedPreview}
-            style={{ 
-                flex: 1, padding: "14px", borderRadius: 12, 
-                background: isDegradedPreview ? "#1e293b" : "linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%)", 
-                color: isDegradedPreview ? "#64748b" : "#082f49", 
-                fontWeight: 800, border: 0, cursor: isSigning ? "not-allowed" : "pointer",
-                boxShadow: isDegradedPreview ? "none" : "0 4px 12px rgba(14, 165, 233, 0.2)"
-            }}
-          >
-            {isSigning ? "Signing..." : isDegradedPreview ? "Verification Failed" : "Execute Strategy"}
-          </button>
-          <button
-            onClick={onCancel}
-            style={{ 
-                padding: "14px 20px", borderRadius: 12, background: "rgba(255, 255, 255, 0.05)", 
-                color: "#f8fafc", border: "1px solid rgba(255, 255, 255, 0.1)", fontWeight: 600, cursor: "pointer" 
-            }}
-          >
-            Cancel
-          </button>
+        <div style={{ marginTop: 8 }}>
+          <div style={{
+              padding: 10,
+              borderRadius: 10,
+              background: riskConfirmation.background,
+              border: `1px solid ${riskConfirmation.border}`,
+              color: riskConfirmation.color,
+              fontSize: 12,
+              lineHeight: 1.4,
+              marginBottom: 10
+          }}>
+            <div style={{ fontWeight: 800, marginBottom: 3 }}>{riskConfirmation.title}</div>
+            <div style={{ color: "#cbd5e1" }}>{riskConfirmation.detail}</div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={onConfirm}
+              disabled={isSigning || isDegradedPreview}
+              style={{ 
+                  flex: 1, padding: "14px", borderRadius: 12, 
+                  background: isDegradedPreview ? "#1e293b" : risk?.level === "high" ? "linear-gradient(135deg, #f87171 0%, #ef4444 100%)" : "linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%)", 
+                  color: isDegradedPreview ? "#64748b" : risk?.level === "high" ? "#450a0a" : "#082f49", 
+                  fontWeight: 800, border: 0, cursor: isSigning || isDegradedPreview ? "not-allowed" : "pointer",
+                  boxShadow: isDegradedPreview ? "none" : "0 4px 12px rgba(14, 165, 233, 0.2)"
+              }}
+            >
+              {isSigning ? "Signing..." : isDegradedPreview ? "Verification Failed" : riskConfirmation.button}
+            </button>
+            <button
+              onClick={onCancel}
+              style={{ 
+                  padding: "14px 20px", borderRadius: 12, background: "rgba(255, 255, 255, 0.05)", 
+                  color: "#f8fafc", border: "1px solid rgba(255, 255, 255, 0.1)", fontWeight: 600, cursor: "pointer" 
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
       

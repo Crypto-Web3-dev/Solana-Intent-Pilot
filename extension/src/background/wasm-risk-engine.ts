@@ -13,10 +13,22 @@ export interface WasmRiskEngine {
 class CoreWasmRiskEngine implements WasmRiskEngine {
   async scanRisk(intent: SIPIntent): Promise<SecurityReport | null> {
     try {
-      if (!scan_risk) return null;
-      console.log("[Wasm Engine] Scanning intent with Rust core...");
-      const resultJson = scan_risk(JSON.stringify(intent));
-      return JSON.parse(resultJson) as SecurityReport;
+      if (!scan_risk) {
+        console.error("[Wasm Engine] scan_risk function is not defined!");
+        return null;
+      }
+      const inputJson = JSON.stringify(intent);
+      console.log("[Wasm Engine] Scanning intent with Rust core. Input payload length:", inputJson.length);
+      
+      const resultJson = scan_risk(inputJson);
+      console.log("[Wasm Engine] Raw result from Rust:", resultJson);
+      
+      const report = JSON.parse(resultJson);
+      if (report.error) {
+        console.error("[Wasm Engine] Rust core returned an error:", report.error);
+        return null;
+      }
+      return report as SecurityReport;
     } catch (err) {
       console.error("[Wasm Engine] Runtime error during scan:", err);
       return null;

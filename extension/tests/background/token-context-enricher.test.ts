@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  clearTokenContextMetadataCache,
   enrichDetectedContext,
   extractSolscanTokenMetadata,
   verifyJupiterToken,
@@ -11,6 +12,11 @@ import type { DetectedContextSnapshot } from "../../src/shared/context";
 const pumpMint = "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn";
 const raveMint = "raveUiWMT7ndHqMz9VfhXHzGaqZ4o9Q8VgKzYfY5xQn";
 const accountAddress = "D27DgiipBR5dRdij2L6NQ27xwyiLK5Q2DsEM5ML5EuLK";
+
+afterEach(() => {
+  clearTokenContextMetadataCache();
+  vi.restoreAllMocks();
+});
 
 function htmlResponse(html: string, url: string, ok = true): Response {
   return {
@@ -100,6 +106,36 @@ describe("token context enricher", () => {
       icon: "https://static.jup.ag/pump/icon.png",
       verificationSource: "jupiter"
     });
+  });
+
+  it("binds the default fetch when verifying mint metadata from a worker runtime", async () => {
+    const fetchSpy = vi.fn(function (this: unknown, url: RequestInfo | URL) {
+      if (this !== globalThis) {
+        throw new TypeError("Illegal invocation");
+      }
+
+      return Promise.resolve(
+        jsonResponse(
+          [
+            {
+              id: pumpMint,
+              name: "Pump",
+              symbol: "PUMP",
+              decimals: 6
+            }
+          ],
+          String(url)
+        )
+      );
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(verifyJupiterToken(pumpMint)).resolves.toMatchObject({
+      mint: pumpMint,
+      symbol: "PUMP",
+      decimals: 6
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it("verifies a symbol-only candidate through a unique Jupiter exact match", async () => {
@@ -219,5 +255,67 @@ describe("token context enricher", () => {
     );
 
     await expect(verifySolscanToken(accountAddress, fetchImpl)).resolves.toBeNull();
+  });
+
+  it("reuses mint metadata for matching symbol hints and repeated enrichment", async () => {
+    const fuckMint = "9Wvw5mk9wJB22a7KBdFQydpZd3cMa6BZ1pga2PyGpump";
+    const context: DetectedContextSnapshot = {
+      tabId: 1,
+      url: `https://pump.fun/coin/${fuckMint}`,
+      title: "FUCK",
+      detectedAt: "2026-04-27T00:00:00.000Z",
+      selectedText: "FUCK",
+      rawHints: [],
+      detectedTokens: [
+        {
+          mint: fuckMint,
+          source: "generic",
+          confidence: 0.96
+        },
+        {
+          symbol: "FUCK",
+          source: "generic",
+          confidence: 0.9
+        }
+      ]
+    };
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const href = String(url);
+      return jsonResponse(
+        [
+          {
+            id: fuckMint,
+            name: "FUCK",
+            symbol: "FUCK",
+            decimals: 6
+          }
+        ],
+        href
+      );
+    });
+
+    const first = await enrichDetectedContext(context, { fetchImpl });
+    const second = await enrichDetectedContext(context, { fetchImpl });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(String(fetchImpl.mock.calls[0][0])).toContain(`query=${fuckMint}`);
+    expect(first.detectedTokens).toContainEqual({
+      mint: fuckMint,
+      name: "FUCK",
+      symbol: "FUCK",
+      decimals: 6,
+      source: "generic",
+      confidence: 0.96,
+      verified: true,
+      verificationSource: "jupiter"
+    });
+    expect(second.detectedTokens).toContainEqual(
+      expect.objectContaining({
+        mint: fuckMint,
+        symbol: "FUCK",
+        decimals: 6,
+        verified: true
+      })
+    );
   });
 });

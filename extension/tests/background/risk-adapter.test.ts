@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock the entire wasm-risk-engine module before any other imports
 vi.mock("../../src/background/wasm-risk-engine", () => ({
@@ -91,6 +91,10 @@ vi.mock("../../src/background/wasm-risk-engine", () => ({
 import { createDefaultRiskAdapter } from "../../src/background/risk-adapter";
 import type { SIPIntent } from "../../src/shared/intent";
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const intent: SIPIntent = {
   intentId: "test-intent-id",
   actions: [
@@ -151,6 +155,101 @@ describe("risk adapter basic", () => {
     expect(report.source).toBe("policy-fallback");
     expect(report.blocking).toBe(false);
   });
+
+  it("does not present wasm baseline as safe when live risk data is missing", async () => {
+    const adapter = createDefaultRiskAdapter({
+      loadWasmRiskEngine: async () => ({
+        scanRisk: async () => ({
+          source: "wasm",
+          score: 100,
+          level: "low",
+          blocking: false,
+          checks: [
+            {
+              key: "baseline",
+              label: "Safe Baseline",
+              status: "pass",
+              detail: "No complex risk patterns detected."
+            }
+          ],
+          summary: "Scan Completed"
+        })
+      })
+    });
+
+    const report = await adapter.scanRisk(intent);
+
+    expect(report.source).toBe("wasm");
+    expect(report.level).toBe("unknown");
+    expect(report.summary).toBe("Risk data incomplete");
+    expect(report.checks.some((check) => check.key === "minimum-risk-data")).toBe(true);
+  });
+
+  it("uses Jupiter tokens v2 search for risk metadata enrichment", async () => {
+    vi.stubEnv("PLASMO_PUBLIC_JUPITER_API_KEY", "jup-test-key");
+
+    let scannedIntent: SIPIntent | null = null;
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      expect(url).toBe(
+        `https://api.jup.ag/tokens/v2/search?query=${intent.actions[0].payload.outputMint}`
+      );
+      expect(url).not.toContain("/api/v1/token/");
+
+      return {
+        ok: true,
+        json: async () => [
+          {
+            id: intent.actions[0].payload.outputMint,
+            isVerified: true,
+            tags: ["verified"],
+            liquidity: 123456,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            audit: {
+              mintAuthorityDisabled: true,
+              freezeAuthorityDisabled: true
+            }
+          }
+        ]
+      } as Response;
+    });
+
+    const adapter = createDefaultRiskAdapter({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      loadWasmRiskEngine: async () => ({
+        scanRisk: async (nextIntent) => {
+          scannedIntent = nextIntent;
+          return {
+            source: "wasm",
+            score: 100,
+            level: "low",
+            blocking: false,
+            checks: [
+              {
+                key: "baseline",
+                label: "Safe Baseline",
+                status: "pass",
+                detail: "Verified metadata available."
+              }
+            ],
+            summary: "Scan Completed"
+          };
+        }
+      })
+    });
+
+    const report = await adapter.scanRisk(intent);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(scannedIntent?.metadata.riskContext).toMatchObject({
+      mintAuthority: null,
+      freezeAuthority: null,
+      isJupVerified: true,
+      liquidityUsd: 123456,
+      tokenAgeHours: expect.any(Number)
+    });
+    expect(report.level).toBe("low");
+  });
 });
 
 const TOKENS = {
@@ -168,7 +267,16 @@ describe("risk adapter - real world scenarios", () => {
       actions: [{
         ...intent.actions[0],
         payload: { ...intent.actions[0].payload, outputMint: TOKENS.USDC }
-      }]
+      }],
+      metadata: {
+        ...intent.metadata,
+        riskContext: {
+          mintAuthority: null,
+          freezeAuthority: null,
+          isJupVerified: true,
+          liquidityUsd: 1000000
+        }
+      }
     };
 
     const report = await adapter.scanRisk(usdcIntent);

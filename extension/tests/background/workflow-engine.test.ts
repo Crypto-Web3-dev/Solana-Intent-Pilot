@@ -250,9 +250,9 @@ describe("workflow engine", () => {
     expect(engine.getState("req-2b")?.phase).toBe("quoting");
   });
 
-  it("moves to blocked when risk is blocking", () => {
+  it("continues to quoting when risk is high and requires user confirmation later", () => {
     const engine = createWorkflowEngine();
-    const blockedRisk: SecurityReport = {
+    const highRisk: SecurityReport = {
       source: "policy-fallback",
       score: 10,
       level: "high",
@@ -270,10 +270,10 @@ describe("workflow engine", () => {
 
     engine.start("req-3");
     engine.handleParsedIntent("req-3", validIntent);
-    engine.handleRiskReport("req-3", blockedRisk);
+    engine.handleRiskReport("req-3", highRisk);
 
-    expect(engine.getState("req-3")?.phase).toBe("blocked");
-    expect(engine.getState("req-3")?.reason).toBe("risk-blocked");
+    expect(engine.getState("req-3")?.phase).toBe("quoting");
+    expect(engine.getState("req-3")?.reason).toBeUndefined();
   });
 
   it("moves to failed when simulation fails during preview generation", () => {
@@ -786,10 +786,28 @@ describe("workflow engine", () => {
     });
   });
 
-  it("emits a blocked state when risk scan blocks execution", async () => {
-    const router = createMessageRouter();
+  it("continues to preview when risk scan returns high risk", async () => {
+    const emitted: SIPRuntimeMessage[] = [];
+    const router = createMessageRouter(undefined, {
+      ...createMockRuntimeServices(),
+      scanRisk: vi.fn().mockResolvedValue({
+        source: "policy-fallback",
+        score: 10,
+        level: "high",
+        blocking: true,
+        checks: [
+          {
+            key: "mint-authority",
+            label: "Mint Authority",
+            status: "fail",
+            detail: "Mint authority is present"
+          }
+        ],
+        summary: "High risk detected"
+      } satisfies SecurityReport)
+    }, (event) => emitted.push(event));
 
-    const events = await router.handleIntentRequest({
+    await router.handleIntentRequest({
       type: "intent.parse.requested",
       payload: {
         requestId: "req-blocked",
@@ -806,16 +824,13 @@ describe("workflow engine", () => {
       }
     });
 
-    expect(events.some((event) => event.type === "execution.preview.ready")).toBe(
-      false
-    );
-    expect(events.some((event) => event.type === "risk.scan.completed")).toBe(
+    expect(emitted.some((event) => event.type === "execution.preview.ready")).toBe(true);
+    expect(emitted.some((event) => event.type === "risk.scan.completed")).toBe(
       true
     );
-    expect(getWorkflowStates(events).at(-1)?.payload).toMatchObject({
+    expect(getWorkflowStates(emitted).at(-1)?.payload).toMatchObject({
       requestId: "req-blocked",
-      phase: "blocked",
-      reason: "risk-blocked"
+      phase: "awaiting-signature"
     });
   });
 

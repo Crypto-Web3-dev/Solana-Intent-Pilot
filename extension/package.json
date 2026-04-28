@@ -5,8 +5,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "plasmo dev",
-    "build": "plasmo build",
+    "dev": "node scripts/run-plasmo.mjs dev",
+    "build": "node scripts/run-plasmo.mjs build",
     "test": "node scripts/run-vitest.mjs"
   },
   "dependencies": {

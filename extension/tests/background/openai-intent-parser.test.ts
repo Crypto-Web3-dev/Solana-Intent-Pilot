@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createOpenAIIntentParser,
   formatContextForPrompt,
@@ -135,7 +135,182 @@ const multiVerifiedContext: DetectedContextSnapshot = {
   ]
 };
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
 describe("openai intent parser", () => {
+  it("calls OpenRouter Responses API for AI-backed parsing", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        output_text: JSON.stringify({
+          token: "BONK",
+          amount: "1",
+          amountUnit: "SOL",
+          swapMode: "ExactIn"
+        })
+      })
+    });
+
+    const parser = createOpenAIIntentParser({
+      apiKey: "or-test-key",
+      model: "openai/gpt-oss-120b:free",
+      fetchImpl
+    });
+
+    const result = await parser.parseIntent("buy 1 SOL of BONK", contextSnapshot);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, request] = fetchImpl.mock.calls[0];
+    expect(url).toBe("https://openrouter.ai/api/v1/responses");
+    expect(request.headers.Authorization).toBe("Bearer or-test-key");
+    expect(JSON.parse(request.body)).toMatchObject({
+      model: "openai/gpt-oss-120b:free",
+      temperature: 0,
+      max_output_tokens: 128
+    });
+    expect(JSON.parse(request.body).reasoning).toBeUndefined();
+    expect(JSON.parse(request.body).text).toBeUndefined();
+    expect(result.actions[0].payload.outputSymbol).toBe("BONK");
+  });
+
+  it("falls back to deterministic parsing when OpenRouter returns completed with no output", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "gen-empty",
+        object: "response",
+        status: "completed",
+        output: [],
+        error: null
+      })
+    });
+
+    const parser = createOpenAIIntentParser({
+      apiKey: "or-test-key",
+      fetchImpl
+    });
+
+    const result = await parser.parseIntent("buy 1 SOL of CRIS", {
+      ...contextSnapshot,
+      selectedText: "cris",
+      detectedTokens: [
+        {
+          mint: "2VuEj1YCQXknpBKPonqBxUCfqvHSJ21FgF5qSgQEpump",
+          symbol: "cris",
+          name: "cris mayhem donkdong rasta",
+          source: "generic",
+          confidence: 0.96,
+          verified: true,
+          decimals: 6,
+          verificationSource: "jupiter"
+        }
+      ]
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result.metadata.needsClarification).toBe(false);
+    expect(result.actions[0].payload.inputSymbol).toBe("SOL");
+    expect(result.actions[0].payload.outputSymbol).toBe("cris");
+    expect(result.actions[0].payload.outputDecimals).toBe(6);
+    expect(result.actions[0].payload.amount).toBe("1000000000");
+  });
+
+  it("ignores OpenRouter reasoning items and parses only assistant output_text", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "gen-test",
+        object: "response",
+        status: "completed",
+        output: [
+          {
+            id: "rs-test",
+            type: "reasoning",
+            status: "completed",
+            content: [
+              {
+                type: "reasoning_text",
+                text: "This text should never be parsed or shown."
+              }
+            ]
+          },
+          {
+            id: "msg-test",
+            type: "message",
+            role: "assistant",
+            status: "completed",
+            content: [
+              {
+                type: "output_text",
+                text: "{\"intent\":\"swap\",\"token\":\"CRIS\",\"amount\":1,\"amountUnit\":\"SOL\",\"swapMode\":\"ExactIn\"}"
+              }
+            ]
+          }
+        ]
+      })
+    });
+
+    const parser = createOpenAIIntentParser({
+      apiKey: "or-test-key",
+      fetchImpl
+    });
+
+    const result = await parser.parseIntent("buy 1 SOL of CRIS", {
+      ...contextSnapshot,
+      selectedText: "cris",
+      detectedTokens: [
+        {
+          mint: "2VuEj1YCQXknpBKPonqBxUCfqvHSJ21FgF5qSgQEpump",
+          symbol: "cris",
+          name: "cris mayhem donkdong rasta",
+          source: "generic",
+          confidence: 0.96,
+          verified: true,
+          decimals: 6,
+          verificationSource: "jupiter"
+        }
+      ]
+    });
+
+    expect(result.metadata.needsClarification).toBe(false);
+    expect(result.actions[0].payload.outputSymbol).toBe("cris");
+    expect(result.actions[0].payload.outputDecimals).toBe(6);
+  });
+
+  it("binds the default fetch when calling OpenRouter from a worker runtime", async () => {
+    const fetchSpy = vi.fn(function (this: unknown) {
+      if (this !== globalThis) {
+        throw new TypeError("Illegal invocation");
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          output_text: JSON.stringify({
+            token: "BONK",
+            amount: "1",
+            amountUnit: "SOL",
+            swapMode: "ExactIn"
+          })
+        })
+      } as Response);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const parser = createOpenAIIntentParser({
+      apiKey: "or-test-key",
+      model: "openai/gpt-oss-120b:free"
+    });
+
+    const result = await parser.parseIntent("buy 1 SOL of BONK", contextSnapshot);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(result.actions[0].payload.outputSymbol).toBe("BONK");
+  });
+
   it("asks the user to confirm page token candidates before calling AI for this", async () => {
     const mockCompletion = {
       async *[Symbol.asyncIterator]() {

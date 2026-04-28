@@ -29,7 +29,9 @@ type ChromeApi = {
   scripting?: ChromeScriptingApi;
 };
 
-const chromeApi = (globalThis as typeof globalThis & { chrome?: ChromeApi }).chrome;
+function getChromeApi() {
+  return (globalThis as typeof globalThis & { chrome?: ChromeApi }).chrome;
+}
 
 function canInjectIntoUrl(url?: string) {
   if (!url) return false;
@@ -53,6 +55,7 @@ export function findSignableTab(tabs: BrowserTab[], preferredTabId?: number) {
 export async function detectWalletStatus(
   preferredTabId?: number
 ): Promise<{ status: WalletStatus; address?: string }> {
+  const chromeApi = getChromeApi();
   if (!chromeApi?.tabs?.query || !chromeApi?.scripting?.executeScript) {
     return { status: "unknown" };
   }
@@ -66,21 +69,42 @@ export async function detectWalletStatus(
       target: { tabId: tab.id },
       world: "MAIN",
       args: [],
-      func: () => {
+      func: async () => {
         const solana = (window as any).solana;
         if (!solana) return null;
+        let publicKey = solana.publicKey?.toBase58() || null;
+
+        if (!publicKey && solana.connect) {
+          try {
+            const connected = await solana.connect();
+            publicKey =
+              connected?.publicKey?.toBase58?.() ||
+              solana.publicKey?.toBase58?.() ||
+              null;
+          } catch {
+            return {
+              isConnected: false,
+              publicKey: null,
+              providerAvailable: true
+            };
+          }
+        }
+
         return {
           isConnected: solana.isConnected || false,
-          publicKey: solana.publicKey?.toBase58() || null
+          publicKey,
+          providerAvailable: true
         };
       }
     });
 
     const result = results.at(0)?.result as any;
     if (!result) return { status: "provider-missing" };
+    if (!result.publicKey) return { status: "provider-missing" };
+
     return {
       status: "ready",
-      address: result.publicKey || undefined
+      address: result.publicKey
     };
   } catch {
     return { status: "unknown" };
@@ -93,6 +117,7 @@ export async function submitViaPageBridge(
   preview: ExecutionPreview,
   preferredTabId?: number
 ): Promise<{ signature: string; explorerUrl?: string }> {
+  const chromeApi = getChromeApi();
   if (!chromeApi?.tabs?.query || !chromeApi?.scripting) {
     throw new Error("Chrome API is unavailable");
   }

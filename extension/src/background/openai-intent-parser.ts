@@ -1,4 +1,3 @@
-import OpenAI from "openai";
 import type { DetectedContextSnapshot } from "../shared/context";
 import type {
   ClarificationKind,
@@ -6,19 +5,21 @@ import type {
   SIPIntent
 } from "../shared/intent";
 
-type OpenAIResponseIntent = {
-  intent: SIPIntent["intent"];
-  confidence: number;
-  payload: SIPIntent["payload"];
-  metadata: SIPIntent["metadata"];
+type IntentModelFetch = (
+  input: RequestInfo | URL,
+  init?: RequestInit
+) => Promise<Response>;
+
+type LegacyCompletionClient = {
+  chat: {
+    completions: {
+      create(request: unknown): Promise<AsyncIterable<{ choices?: Array<{ delta?: { content?: string } }> }>>;
+    };
+  };
 };
 
-function createClient(apiKey: string) {
-  return new OpenAI({
-    apiKey,
-    baseURL: 'https://integrate.api.nvidia.com/v1',
-    dangerouslyAllowBrowser: true
-  });
+function getDefaultFetch(): IntentModelFetch {
+  return globalThis.fetch.bind(globalThis);
 }
 
 export function formatContextForPrompt(context?: DetectedContextSnapshot) {
@@ -598,19 +599,177 @@ export function normalizeIntentWithContext(
   };
 }
 
+function buildSystemPrompt() {
+  return `You are a strict Solana trading intent parser.
+Output ONLY raw JSON. Do NOT include any reasoning.
+The response must be one compact JSON object with keys: token, amount, amountUnit, swapMode.
+Constraint: In a SWAP, the input token (amountUnit) and output token (token) MUST NOT be the same.
+Include swapMode as either "ExactIn" or "ExactOut".
+Rules for amountUnit:
+- If user says "buy 100 JUP", set token: "JUP", amount: 100, amountUnit: "JUP".
+- If user says "buy 10 SOL of JUP", set token: "JUP", amount: 10, amountUnit: "SOL".
+- If user says "swap 10 SOL to USDC", set token: "USDC", amount: 10, amountUnit: "SOL", swapMode: "ExactIn".
+- If user says "buy 100 USD1 with SOL", set token: "USD1", amount: 100, amountUnit: "SOL", swapMode: "ExactOut".
+- If user says "receive 100 USD1 with SOL", set token: "USD1", amount: 100, amountUnit: "SOL", swapMode: "ExactOut".`;
+}
+
+function buildUserPrompt(userInput: string, context?: DetectedContextSnapshot) {
+  return `User request: ${userInput}\nContext: ${formatContextForPrompt(context)}`;
+}
+
+async function readLegacyCompletionContent(
+  client: LegacyCompletionClient,
+  model: string,
+  userInput: string,
+  context?: DetectedContextSnapshot
+) {
+  const completion = await client.chat.completions.create({
+    model,
+    messages: [
+      { role: "system", content: buildSystemPrompt() },
+      { role: "user", content: buildUserPrompt(userInput, context) }
+    ],
+    temperature: 0.1,
+    max_tokens: 4096,
+    stream: true
+  });
+
+  let fullContent = "";
+  for await (const chunk of completion) {
+    fullContent += chunk.choices?.[0]?.delta?.content || "";
+  }
+
+  return fullContent;
+}
+
+function extractResponsesText(payload: unknown): string {
+  if (typeof payload === "string") return payload;
+  if (!payload || typeof payload !== "object") return "";
+
+  const value = payload as any;
+  if (typeof value.output_text === "string") return value.output_text;
+
+  const output = Array.isArray(value.output) ? value.output : [];
+  const messageTextParts = output
+    .filter((item: any) => item?.type === "message" && item?.role === "assistant")
+    .flatMap((item: any) => {
+      const content = Array.isArray(item?.content) ? item.content : [];
+      return content
+        .filter((part: any) => part?.type === "output_text")
+        .map((part: any) => part?.text)
+        .filter((text: unknown): text is string => typeof text === "string");
+    });
+
+  if (messageTextParts.length) return messageTextParts.join("");
+
+  if (typeof value.content === "string") return value.content;
+  if (typeof value.text === "string") return value.text;
+  return "";
+}
+
+async function readOpenRouterResponsesContent(options: {
+  apiKey: string;
+  model: string;
+  fetchImpl: IntentModelFetch;
+  baseUrl: string;
+  userInput: string;
+  context?: DetectedContextSnapshot;
+}) {
+  const response = await options.fetchImpl(`${options.baseUrl}/responses`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${options.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: options.model,
+      temperature: 0,
+      max_output_tokens: 128,
+      input: [
+        { role: "system", content: buildSystemPrompt() },
+        { role: "user", content: buildUserPrompt(options.userInput, options.context) }
+      ]
+    })
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === "object" && "error" in payload
+        ? JSON.stringify((payload as any).error)
+        : `OpenRouter request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  return extractResponsesText(payload);
+}
+
+function parseModelJson(fullContent: string) {
+  let jsonStr = "";
+  const firstOpen = fullContent.indexOf("{");
+  const lastClose = fullContent.lastIndexOf("}");
+  if (firstOpen !== -1 && lastClose !== -1) jsonStr = fullContent.substring(firstOpen, lastClose + 1);
+  if (!jsonStr) jsonStr = fullContent.replace(/```[a-z]*|```/gi, "").trim();
+
+  return JSON.parse(jsonStr);
+}
+
+function parseSimpleSwapCommand(userInput: string) {
+  const normalized = userInput.trim();
+
+  const buySpendMatch = normalized.match(
+    /^buy\s+([0-9]+(?:\.[0-9]+)?)\s+([A-Za-z0-9]+)\s+(?:of|for|to)\s+(.+)$/i
+  );
+  if (buySpendMatch) {
+    return {
+      token: buySpendMatch[3].trim(),
+      amount: buySpendMatch[1],
+      amountUnit: buySpendMatch[2].trim().toUpperCase(),
+      swapMode: "ExactIn"
+    };
+  }
+
+  const swapMatch = normalized.match(
+    /^swap\s+([0-9]+(?:\.[0-9]+)?)\s+([A-Za-z0-9]+)\s+(?:to|for)\s+(.+)$/i
+  );
+  if (swapMatch) {
+    return {
+      token: swapMatch[3].trim(),
+      amount: swapMatch[1],
+      amountUnit: swapMatch[2].trim().toUpperCase(),
+      swapMode: "ExactIn"
+    };
+  }
+
+  const buyOutputWithInputMatch = normalized.match(
+    /^buy\s+([0-9]+(?:\.[0-9]+)?)\s+([A-Za-z0-9]+)\s+with\s+([A-Za-z0-9]+)$/i
+  );
+  if (buyOutputWithInputMatch) {
+    return {
+      token: buyOutputWithInputMatch[2].trim().toUpperCase(),
+      amount: buyOutputWithInputMatch[1],
+      amountUnit: buyOutputWithInputMatch[3].trim().toUpperCase(),
+      swapMode: "ExactOut"
+    };
+  }
+
+  return null;
+}
+
 export function createOpenAIIntentParser(options?: {
   apiKey?: string;
   model?: string;
-  client?: OpenAI;
+  client?: LegacyCompletionClient;
+  fetchImpl?: IntentModelFetch;
+  baseUrl?: string;
 }) {
-  const apiKey = options?.apiKey ?? process.env.PLASMO_PUBLIC_NVIDIA_API_KEY;
-  const model = options?.model ?? "z-ai/glm-5.1";
-
-  const client = options?.client ?? new OpenAI({
-    apiKey: apiKey || "",
-    baseURL: 'https://integrate.api.nvidia.com/v1',
-    dangerouslyAllowBrowser: true
-  });
+  const apiKey =
+    options?.apiKey ??
+    process.env.PLASMO_PUBLIC_OPENROUTER_API_KEY ??
+    process.env.OPENROUTER_API_KEY;
+  const model = options?.model ?? process.env.PLASMO_PUBLIC_OPENROUTER_MODEL ?? "openai/gpt-oss-120b:free";
+  const fetchImpl = options?.fetchImpl ?? getDefaultFetch();
+  const baseUrl = options?.baseUrl ?? "https://openrouter.ai/api/v1";
 
   return {
     async parseIntent(
@@ -623,49 +782,31 @@ export function createOpenAIIntentParser(options?: {
       }
 
       if (!apiKey) {
-        throw new Error("NVIDIA_API_KEY is not configured");
+        throw new Error("OPENROUTER_API_KEY is not configured");
       }
 
-      const completion = await client.chat.completions.create({
-        model,
-        messages: [
-          {
-            role: "system",
-            content:
-              `You are a strict Solana trading intent parser.
-        Output ONLY raw JSON. Do NOT include any reasoning.
-        Constraint: In a SWAP, the input token (amountUnit) and output token (token) MUST NOT be the same.
-        Include swapMode as either "ExactIn" or "ExactOut".
-        Rules for amountUnit:
-        - If user says "buy 100 JUP", set token: "JUP", amount: 100, amountUnit: "JUP".
-        - If user says "buy 10 SOL of JUP", set token: "JUP", amount: 10, amountUnit: "SOL".
-        - If user says "swap 10 SOL to USDC", set token: "USDC", amount: 10, amountUnit: "SOL", swapMode: "ExactIn".
-        - If user says "buy 100 USD1 with SOL", set token: "USD1", amount: 100, amountUnit: "SOL", swapMode: "ExactOut".
-        - If user says "receive 100 USD1 with SOL", set token: "USD1", amount: 100, amountUnit: "SOL", swapMode: "ExactOut".`
-          },          { role: "user", content: `User request: ${userInput}\nContext: ${formatContextForPrompt(context)}` }
-        ],
-        temperature: 0.1,
-        max_tokens: 4096,
-        stream: true
-      });
-
-      let fullContent = "";
-      for await (const chunk of completion) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        fullContent += content;
-      }
+      const fullContent = options?.client
+        ? await readLegacyCompletionContent(options.client, model, userInput, context)
+        : await readOpenRouterResponsesContent({
+            apiKey,
+            model,
+            fetchImpl,
+            baseUrl,
+            userInput,
+            context
+          });
 
       try {
-        let jsonStr = "";
-        const firstOpen = fullContent.indexOf('{');
-        const lastClose = fullContent.lastIndexOf('}');
-        if (firstOpen !== -1 && lastClose !== -1) jsonStr = fullContent.substring(firstOpen, lastClose + 1);
-        if (!jsonStr) jsonStr = fullContent.replace(/```[a-z]*|```/gi, "").trim();
-
-        const parsed = JSON.parse(jsonStr);
+        const parsed = parseModelJson(fullContent);
         const mapped = await mapToSIPIntent(parsed, context, userInput, userPublicKey);
         return normalizeIntentWithContext(mapped, context, userInput);
       } catch (e) {
+        const fallback = parseSimpleSwapCommand(userInput);
+        if (fallback) {
+          const mapped = await mapToSIPIntent(fallback, context, userInput, userPublicKey);
+          return normalizeIntentWithContext(mapped, context, userInput);
+        }
+
         console.error("[AI] Failed to parse JSON. Raw:", fullContent);
         throw new Error("AI output was not valid JSON");
       }

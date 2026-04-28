@@ -14,34 +14,93 @@ function getSelectedText(): string {
   return window.getSelection()?.toString().trim() || "";
 }
 
-function detectTokenHints(url: string, text: string): TokenHint[] {
+function detectSource(url: string): TokenHint["source"] {
+  if (url.includes("x.com")) return "twitter";
+  if (url.includes("dexscreener")) return "dexscreener";
+  return "generic";
+}
+
+function pushUniqueHint(hints: TokenHint[], hint: TokenHint) {
+  const key = hint.mint ? `mint:${hint.mint}` : hint.symbol ? `symbol:${hint.symbol}` : "";
+  if (!key) return;
+
+  const existing = hints.find((candidate) =>
+    hint.mint
+      ? candidate.mint === hint.mint
+      : candidate.symbol === hint.symbol
+  );
+
+  if (!existing) {
+    hints.push(hint);
+  }
+}
+
+function detectPumpFunMint(url: string): string | null {
+  return url.match(/pump\.fun\/coin\/([1-9A-HJ-NP-Za-km-z]{32,44})/)?.[1] ?? null;
+}
+
+function detectLinkMints(): string[] {
+  const links = Array.from(document.querySelectorAll?.("a[href]") ?? []);
+  return links
+    .map((link) => link.getAttribute("href") ?? "")
+    .map((href) => href.match(/\/(?:token|coin)\/([1-9A-HJ-NP-Za-km-z]{32,44})/)?.[1])
+    .filter((mint): mint is string => Boolean(mint));
+}
+
+function detectSelectedSymbol(selectedText: string): string | null {
+  const trimmed = selectedText.trim();
+  const cashtag = trimmed.match(/^\$([A-Z]{2,10})$/)?.[1];
+  if (cashtag) return cashtag;
+
+  return /^[A-Z][A-Z0-9]{1,9}$/.test(trimmed) ? trimmed : null;
+}
+
+function detectTokenHints(url: string, text: string, selectedText: string): TokenHint[] {
   const hints: TokenHint[] = [];
-  
-  // 1. Solana 地址识别 (Base58, 32-44 bytes)
+  const source = detectSource(url);
+
+  const pumpMint = detectPumpFunMint(url);
+  if (pumpMint) {
+    pushUniqueHint(hints, { mint: pumpMint, source, confidence: 0.96 });
+  }
+
+  detectLinkMints().forEach((mint) => {
+    pushUniqueHint(hints, { mint, source, confidence: 0.74 });
+  });
+
+  const selectedSymbol = detectSelectedSymbol(selectedText);
+  if (selectedSymbol) {
+    pushUniqueHint(hints, { symbol: selectedSymbol, source, confidence: 0.9 });
+  }
+
   const addressRegex = /\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g;
   const addresses = text.match(addressRegex) || [];
-  
-  // 2. $TICKER 识别
+
   const tickerRegex = /\$[A-Z]{2,10}\b/g;
   const tickers = text.match(tickerRegex) || [];
 
-  const source = url.includes("x.com") ? "twitter" : (url.includes("dexscreener") ? "dexscreener" : "generic");
-
   Array.from(new Set(addresses)).forEach(addr => {
-      hints.push({ mint: addr, source, confidence: 0.95 });
+      pushUniqueHint(hints, { mint: addr, source, confidence: 0.74 });
   });
 
   Array.from(new Set(tickers)).forEach(t => {
-      hints.push({ symbol: t.replace("$", ""), source, confidence: 0.85 });
+      pushUniqueHint(hints, { symbol: t.replace("$", ""), source, confidence: 0.82 });
   });
 
-  return hints.slice(0, 5); // 限制返回数量，防止干扰
+  if (source === "generic") {
+    const commonSymbols = text.match(/\b(USDC|USDT|PUMP|JUP|BONK|WIF)\b/g) || [];
+    Array.from(new Set(commonSymbols)).forEach((symbol) => {
+      pushUniqueHint(hints, { symbol, source, confidence: 0.76 });
+    });
+  }
+
+  return hints.slice(0, 8);
 }
 
 function extractRawHints(): string[] {
   const hints: string[] = [];
   const metaDesc = document.querySelector('meta[name="description"]')?.getAttribute("content");
-  if (metaDesc) hints.push(metaDesc.substring(0, 100));
+  if (metaDesc) hints.push(`Desc: ${metaDesc.substring(0, 100)}`);
 
   const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute("content");
   if (ogTitle) hints.push(ogTitle);
@@ -51,19 +110,29 @@ function extractRawHints(): string[] {
 
 export function captureContext(): any {
   const bodyText = document.body?.innerText || "";
-  // 性能：只扫描前 5000 字符
   const sampleText = bodyText.substring(0, 5000);
-
-  const hints = detectTokenHints(window.location.href, sampleText);
   const selectedText = getSelectedText();
+  const hints = detectTokenHints(window.location.href, sampleText, selectedText);
   const rawHints = extractRawHints();
 
+  const snapshot = {
+    selectedText: selectedText || undefined,
+    detectedTokens: hints,
+    rawHints,
+    detectedAt: new Date().toISOString()
+  };
+
   return {
-    payload: {
-        selectedText: selectedText || undefined,
-        detectedTokens: hints,
-        rawHints: rawHints
-    }
+    ...snapshot,
+    payload: snapshot
+  };
+}
+
+export function createContextDetectedMessage() {
+  const { payload } = captureContext();
+  return {
+    type: "context.detected",
+    payload
   };
 }
 

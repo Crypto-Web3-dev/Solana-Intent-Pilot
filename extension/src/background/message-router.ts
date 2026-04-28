@@ -202,11 +202,20 @@ export function createMessageRouter(
         }
       } catch (error: any) {
         if (error.message === "OPERATION_ABORTED") return [];
+        const reason = error instanceof Error ? error.message : "Jupiter quote request failed";
+
         if (currentActionId) {
           engine.handleActionFailed(requestId, currentActionId);
         } else {
           engine.handleFailure(requestId, "quote-failed");
         }
+
+        const previewFailedEvent: ExecutionPreviewFailedMessage = {
+          type: "execution.preview.failed",
+          payload: { requestId, stage: "quote", reason }
+        };
+        onEvent?.(previewFailedEvent);
+
         pushState(requestId);
         releaseState(requestId);
         return [];

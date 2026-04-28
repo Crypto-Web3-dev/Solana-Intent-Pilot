@@ -35,20 +35,27 @@ export function createJupiterQuoteAdapter(options?: {
   apiKey?: string;
 }): QuoteAdapter {
   const baseUrl = options?.baseUrl ?? "https://api.jup.ag/swap/v2";
-  const apiKey = options?.apiKey ?? process.env.PLASMO_PUBLIC_JUPITER_API_KEY ?? process.env.JUPITER_API_KEY;
+  const apiKey = (
+    options?.apiKey ??
+    process.env.PLASMO_PUBLIC_JUPITER_API_KEY ??
+    process.env.JUPITER_API_KEY ??
+    ""
+  ).trim();
   const fetchImpl = options?.fetchImpl;
 
   const proxiedFetch = async (url: string, options?: any) => {
+    if (!apiKey) {
+      throw new Error("Jupiter order request requires PLASMO_PUBLIC_JUPITER_API_KEY or JUPITER_API_KEY");
+    }
+
     if (fetchImpl || typeof window === 'undefined') {
-      const f = fetchImpl || fetch;
+      const f = fetchImpl || globalThis.fetch.bind(globalThis);
       return f(url, {
         ...options,
-        headers: apiKey
-          ? {
-              ...options?.headers,
-              "x-api-key": apiKey
-            }
-          : options?.headers
+        headers: {
+          ...options?.headers,
+          "x-api-key": apiKey
+        }
       });
     }
 
@@ -61,7 +68,7 @@ export function createJupiterQuoteAdapter(options?: {
         headers: {
             ...options?.headers,
             "Content-Type": "application/json",
-            ...(apiKey ? { "x-api-key": apiKey } : {})
+            "x-api-key": apiKey
         }
     };
 
@@ -80,6 +87,10 @@ export function createJupiterQuoteAdapter(options?: {
   return {
     async getOrder(action: SIPAction) {
       if (!action.payload) throw new Error("Action payload missing for quote");
+      if (!action.payload.userPublicKey) {
+        throw new Error("Jupiter order request requires a taker wallet public key");
+      }
+
       const swapMode = action.payload.swapMode ?? "ExactIn";
 
       const url = new URL(`${baseUrl}/order`);
@@ -89,10 +100,7 @@ export function createJupiterQuoteAdapter(options?: {
       url.searchParams.append("outputMint", action.payload.outputMint);
       url.searchParams.append("amount", action.payload.amount);
       url.searchParams.append("forJitoBundle", "false"); 
-
-      if (action.payload.userPublicKey) {
-        url.searchParams.append("taker", action.payload.userPublicKey);
-      }
+      url.searchParams.append("taker", action.payload.userPublicKey);
 
       const response = await proxiedFetch(url.toString(), {
         method: "GET"

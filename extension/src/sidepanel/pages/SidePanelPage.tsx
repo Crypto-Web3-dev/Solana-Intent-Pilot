@@ -79,6 +79,7 @@ const panelStyles = {
 function getFriendlyError(errorMsg?: string | null) {
     if (!errorMsg) return "";
     const lower = errorMsg.toLowerCase();
+    if (lower.includes("wallet public key") || lower.includes("connect your solana wallet")) return "Connect your Solana wallet before requesting a live Jupiter order.";
     if (lower.includes("user rejected")) return "Signature cancelled by user.";
     if (lower.includes("submit-failed")) return "Transaction failed to broadcast.";
     if (lower.includes("simulation-failed")) return "Execution simulation failed.";
@@ -120,7 +121,7 @@ export function SidePanelPage() {
               width: 8, height: 8, borderRadius: "50%", 
               background: state.walletStatus === "ready" ? "#10b981" : "#64748b" 
             }} />
-            {state.walletStatus === "ready" ? "Wallet Connected" : "Wallet Ready"}
+            {state.walletStatus === "ready" ? "Wallet Connected" : "Wallet Required"}
           </div>
         </div>
       </header>
@@ -269,6 +270,7 @@ export function SidePanelPage() {
           <ActionCard
             preview={state.preview}
             intent={state.intent}
+            risk={state.risk}
             phase={state.phase}
             reason={state.reason}
             clarification={state.clarification}

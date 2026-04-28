@@ -39,7 +39,7 @@ export function createRpcSimulationAdapter(options?: {
   fetchImpl?: typeof fetch;
   rpcUrl?: string;
 }): SimulationAdapter {
-  const fetchImpl = options?.fetchImpl || globalThis.fetch;
+  const fetchImpl = options?.fetchImpl || globalThis.fetch.bind(globalThis);
   // 增加硬编码兜底，防止环境变量丢失导致流程中断
   const rpcUrl = options?.rpcUrl || 
                  process.env.PLASMO_PUBLIC_SOLANA_RPC_URL || 

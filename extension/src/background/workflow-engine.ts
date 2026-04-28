@@ -80,11 +80,7 @@ export function createWorkflowEngine() {
     handleRiskReport(requestId: string, report: SecurityReport) {
       if (currentPhase(requestId) !== "risk-checking") return;
 
-      if (report.blocking) {
-        setState(requestId, "blocked", "risk-blocked");
-      } else {
-        setState(requestId, "quoting");
-      }
+      setState(requestId, "quoting");
     },
     handleActionReady(requestId: string, actionId: string) {
       const state = states.get(requestId);

@@ -73,7 +73,7 @@ Applies to: `atomic-strategies` worktree
 1. 扩展运行在一个普通网页环境里，而不是浏览器内部页或不支持注入的页面。
 2. sidepanel 能拿到当前页面上下文。
 3. background worker 已经启动并监听消息。
-4. 如果要走真实解析链，`PLASMO_PUBLIC_NVIDIA_API_KEY` 已配置。
+4. 如果要走真实解析链，`OPENROUTER_API_KEY` 已配置。
 5. 如果要走真实报价/交易链，Jupiter 和 RPC 相关配置可用。
 6. 如果要走真实签名链，浏览器里需要有可用的 Solana 钱包。
 

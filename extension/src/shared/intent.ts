@@ -46,6 +46,7 @@ export interface SIPIntent {
       isJupVerified?: boolean;
       liquidityUsd?: number;
       tokenCreatedAt?: number;
+      tokenAgeHours?: number;
     };
   };
 }

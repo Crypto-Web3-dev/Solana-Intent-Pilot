@@ -5,7 +5,7 @@ Applies to: `atomic-strategies` worktree
 
 ## Before the Demo
 
-- Confirm `PLASMO_PUBLIC_NVIDIA_API_KEY` is set if you want live intent parsing.
+- Confirm `OPENROUTER_API_KEY` is set if you want live intent parsing.
 - Confirm `PLASMO_PUBLIC_JUPITER_API_KEY` is set if you want live Jupiter-backed token and quote behavior.
 - Confirm `PLASMO_PUBLIC_SOLANA_RPC_URL` is set if you want live RPC simulation behavior.
 - If you want demo-only UI guidance, set `PLASMO_PUBLIC_DEMO_MODE=true`.

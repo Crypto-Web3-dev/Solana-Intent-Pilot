@@ -16,7 +16,17 @@ export interface RiskAdapter {
 
 export interface RiskAdapterDependencies {
   loadWasmRiskEngine?: () => Promise<WasmRiskEngine | null>;
+  fetchImpl?: typeof fetch;
 }
+
+type JupiterTokenRiskMetadata = {
+  isJupVerified: boolean;
+  liquidityUsd: number;
+  mintAuthority?: string | null;
+  freezeAuthority?: string | null;
+  tokenCreatedAt?: number;
+  tokenAgeHours?: number;
+};
 
 function createSecurityCheck(
   key: string,
@@ -155,6 +165,43 @@ function isValidSecurityReport(report: SecurityReport | null): report is Securit
   return report !== null && typeof report.source === "string";
 }
 
+function hasMinimumRiskContext(intent: SIPIntent) {
+  const context = intent.metadata.riskContext;
+  return (
+    !!context &&
+    typeof context.isJupVerified === "boolean" &&
+    typeof context.liquidityUsd === "number" &&
+    "mintAuthority" in context &&
+    "freezeAuthority" in context
+  );
+}
+
+function isWasmBaselineReport(report: SecurityReport) {
+  return (
+    report.level === "low" &&
+    !report.blocking &&
+    report.checks.some((check) => check.key === "baseline" || check.key === "baseline-check")
+  );
+}
+
+function markInsufficientRiskData(report: SecurityReport): SecurityReport {
+  return {
+    ...report,
+    score: 0,
+    level: "unknown",
+    blocking: false,
+    summary: "Risk data incomplete",
+    checks: [
+      {
+        key: "minimum-risk-data",
+        label: "Risk Data",
+        status: "warn",
+        detail: "Live token authority or verification data was unavailable; this is not a verified safe result."
+      }
+    ]
+  };
+}
+
 async function resolveWasmRiskEngine(
   dependencies: RiskAdapterDependencies
 ): Promise<WasmRiskEngine | null> {
@@ -165,20 +212,104 @@ async function resolveWasmRiskEngine(
   return loadDefaultWasmRiskEngine();
 }
 
-async function fetchTokenSecurity(mint: string) {
+function getDefaultFetch() {
+  return globalThis.fetch?.bind(globalThis);
+}
+
+function readAuthorityFromJupiterAudit(
+  audit: any,
+  key: "mintAuthorityDisabled" | "freezeAuthorityDisabled"
+) {
+  if (!audit || typeof audit[key] !== "boolean") return undefined;
+  return audit[key] ? null : "active";
+}
+
+function readJupiterCreatedAt(token: any) {
+  const createdAt = token?.createdAt ?? token?.firstPool?.createdAt;
+  if (typeof createdAt !== "string") return undefined;
+
+  const timestamp = Date.parse(createdAt);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
+}
+
+function calculateTokenAgeHours(createdAt?: number) {
+  if (typeof createdAt !== "number") return undefined;
+
+  return Math.max(0, (Date.now() - createdAt) / 3_600_000);
+}
+
+async function fetchJupiterTokenRiskMetadata(
+  mint: string,
+  fetchImpl: typeof fetch,
+  apiKey?: string
+): Promise<JupiterTokenRiskMetadata | null> {
+  const response = await fetchImpl(
+    `https://api.jup.ag/tokens/v2/search?query=${encodeURIComponent(mint)}`,
+    {
+      method: "GET",
+      headers: apiKey ? { "x-api-key": apiKey } : undefined
+    }
+  );
+
+  if (!response.ok) return null;
+
+  const payload = await response.json().catch(() => null);
+  const tokens = Array.isArray(payload) ? payload : [];
+  const token = tokens.find(
+    (candidate) =>
+      candidate?.id === mint ||
+      candidate?.address === mint ||
+      candidate?.mint === mint
+  );
+  if (!token) return null;
+
+  const tags = Array.isArray(token.tags) ? token.tags : [];
+
+  const tokenCreatedAt = readJupiterCreatedAt(token);
+
+  return {
+    isJupVerified: token.isVerified === true || tags.includes("verified"),
+    liquidityUsd: typeof token.liquidity === "number" ? token.liquidity : 0,
+    mintAuthority: readAuthorityFromJupiterAudit(token.audit, "mintAuthorityDisabled"),
+    freezeAuthority: readAuthorityFromJupiterAudit(token.audit, "freezeAuthorityDisabled"),
+    tokenCreatedAt,
+    tokenAgeHours: calculateTokenAgeHours(tokenCreatedAt)
+  };
+}
+
+async function fetchTokenSecurity(mint: string, fetchImpl: typeof fetch = getDefaultFetch() as typeof fetch) {
   // Use PLASMO_PUBLIC_ prefix as required by Plasmo for environment variables
   const HELIUS_KEY = process.env.PLASMO_PUBLIC_HELIUS_API_KEY || process.env.HELIUS_API_KEY;
   const JUP_KEY = process.env.PLASMO_PUBLIC_JUPITER_API_KEY || process.env.JUPITER_API_KEY;
 
-  if (!HELIUS_KEY) {
-    console.warn("[Risk Adapter] HELIUS_API_KEY is missing, skipping live security check.");
+  if (!fetchImpl) {
+    return null;
+  }
+
+  if (!HELIUS_KEY && !JUP_KEY) {
+    console.warn("[Risk Adapter] Helius and Jupiter API keys are missing, skipping live security check.");
     return null;
   }
 
   try {
+    const jupiterData = await fetchJupiterTokenRiskMetadata(
+      mint,
+      fetchImpl,
+      JUP_KEY
+    ).catch(() => null);
+
+    if (!HELIUS_KEY && !jupiterData) {
+      console.warn("[Risk Adapter] HELIUS_API_KEY is missing and Jupiter token metadata was unavailable.");
+      return null;
+    }
+
+    if (!HELIUS_KEY) {
+      return jupiterData;
+    }
+
     // 1. Fetch Authority via Helius
     const heliusUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-    const accountResponse = await fetch(heliusUrl, {
+    const accountResponse = await fetchImpl(heliusUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -196,21 +327,19 @@ async function fetchTokenSecurity(mint: string) {
     const accountData = await accountResponse.json();
     const parsedData = accountData.result?.value?.data?.parsed?.info;
 
-    // 2. Fetch Verification Status via Jupiter
-    const jupUrl = `https://api.jup.ag/api/v1/token/${mint}`;
-    const headers: Record<string, string> = {};
-    if (JUP_KEY) {
-      headers["x-api-key"] = JUP_KEY;
-    }
-
-    const jupResponse = await fetch(jupUrl, { headers });
-    const jupData = jupResponse.ok ? await jupResponse.json() : null;
-
     return {
-      mintAuthority: parsedData?.mintAuthority || null,
-      freezeAuthority: parsedData?.freezeAuthority || null,
-      isJupVerified: !!jupData && jupData.tags?.includes("verified"),
-      liquidityUsd: jupData ? 1000000 : 0 
+      mintAuthority:
+        parsedData?.mintAuthority ??
+        jupiterData?.mintAuthority ??
+        undefined,
+      freezeAuthority:
+        parsedData?.freezeAuthority ??
+        jupiterData?.freezeAuthority ??
+        undefined,
+      isJupVerified: jupiterData?.isJupVerified ?? false,
+      liquidityUsd: jupiterData?.liquidityUsd ?? 0,
+      tokenCreatedAt: jupiterData?.tokenCreatedAt,
+      tokenAgeHours: jupiterData?.tokenAgeHours
     };
   } catch (err) {
     console.error("[Risk Adapter] Failed to fetch live security data:", err);
@@ -218,7 +347,10 @@ async function fetchTokenSecurity(mint: string) {
   }
 }
 
-async function enrichRiskContext(intent: SIPIntent): Promise<SIPIntent> {
+async function enrichRiskContext(
+  intent: SIPIntent,
+  fetchImpl?: typeof fetch
+): Promise<SIPIntent> {
   const firstAction = intent.actions?.[0];
   const outputMint = firstAction?.payload?.outputMint;
 
@@ -227,7 +359,7 @@ async function enrichRiskContext(intent: SIPIntent): Promise<SIPIntent> {
   }
 
   console.log(`[Risk Adapter] Enriching context for mint: ${outputMint}`);
-  const liveData = await fetchTokenSecurity(outputMint);
+  const liveData = await fetchTokenSecurity(outputMint, fetchImpl);
 
   if (!liveData) return intent;
 
@@ -240,7 +372,8 @@ async function enrichRiskContext(intent: SIPIntent): Promise<SIPIntent> {
         freezeAuthority: liveData.freezeAuthority,
         isJupVerified: liveData.isJupVerified,
         liquidityUsd: liveData.liquidityUsd,
-        tokenCreatedAt: Date.now() // Placeholder as creation time requires more complex indexing
+        tokenCreatedAt: liveData.tokenCreatedAt,
+        tokenAgeHours: liveData.tokenAgeHours
       }
     }
   };
@@ -255,7 +388,10 @@ export function createDefaultRiskAdapter(
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Enrich intent with on-chain data before scanning
-      const enrichedIntent = await enrichRiskContext(intent);
+      const enrichedIntent = await enrichRiskContext(
+        intent,
+        dependencies.fetchImpl ?? getDefaultFetch()
+      );
 
       const wasmEngine = await resolveWasmRiskEngine(dependencies);
 
@@ -263,9 +399,17 @@ export function createDefaultRiskAdapter(
         try {
           const wasmReport = await wasmEngine.scanRisk(enrichedIntent);
           if (isValidSecurityReport(wasmReport)) {
-            return {
+            const report = {
               ...wasmReport,
               source: "wasm" satisfies RiskEngineSource
+            };
+
+            if (!hasMinimumRiskContext(enrichedIntent) && isWasmBaselineReport(report)) {
+              return markInsufficientRiskData(report);
+            }
+
+            return {
+              ...report
             };
           }
         } catch (err) {

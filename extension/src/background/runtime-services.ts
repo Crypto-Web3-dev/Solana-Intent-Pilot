@@ -21,7 +21,8 @@ import { createMockSimulationAdapter } from "./simulation-adapter";
 export interface RuntimeServices {
   parseIntent(
     userInput: string,
-    context?: DetectedContextSnapshot
+    context?: DetectedContextSnapshot,
+    userPublicKey?: string
   ): Promise<SIPIntent>;
   scanRisk(intent: SIPIntent): Promise<SecurityReport>;
   buildPreview(
@@ -74,7 +75,9 @@ export function createProductionRuntimeServices(config: {
   jupiterApiKey?: string;
   rpcUrl?: string;
 }): RuntimeServices {
-  const parser = createDefaultIntentParser();
+  const parser = createDefaultIntentParser({
+    jupiterApiKey: config.jupiterApiKey
+  });
   const riskAdapter = createDefaultRiskAdapter();
   const quoteAdapter = createDefaultQuoteAdapter({
     baseUrl: config.jupiterBaseUrl,

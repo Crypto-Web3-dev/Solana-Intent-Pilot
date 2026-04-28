@@ -181,6 +181,15 @@ export function useSidePanelState(
     }
 
     const wallet = await detectWalletStatus(pageContext.tabId);
+    setPageTabId(pageContext.tabId);
+    setWalletStatus(wallet.status);
+
+    if (!wallet.address) {
+      setPhase("blocked");
+      setReason("wallet-public-key-missing");
+      setErrorMessage("Connect your Solana wallet before requesting a live Jupiter order.");
+      return;
+    }
 
     // 发送请求，不再阻塞等待最终结果，UI 将通过监听器获得实时更新
     void (messageRouter as any).handleIntentRequest({
@@ -201,9 +210,6 @@ export function useSidePanelState(
     if (!requestTracker.current.isCurrent(requestToken)) {
       return;
     }
-
-    setPageTabId(pageContext.tabId);
-    setWalletStatus(wallet.status);
   }
 
   useEffect(() => {

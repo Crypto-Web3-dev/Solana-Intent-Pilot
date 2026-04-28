@@ -132,4 +132,26 @@ describe("detect context", () => {
       )
     ).toBe(true);
   });
+
+  it("captures a selected pump.fun token symbol and the coin mint from the URL", () => {
+    installPage({
+      href: "https://pump.fun/coin/9Wvw5mk9wJB22a7KBdFQydpZd3cMa6BZ1pga2PyGpump",
+      bodyText: "pump.fun token page",
+      selectedText: "FUCK"
+    });
+
+    const context = captureContext();
+
+    expect(context.selectedText).toBe("FUCK");
+    expect(context.detectedTokens).toContainEqual({
+      symbol: "FUCK",
+      source: "generic",
+      confidence: 0.9
+    });
+    expect(context.detectedTokens).toContainEqual({
+      mint: "9Wvw5mk9wJB22a7KBdFQydpZd3cMa6BZ1pga2PyGpump",
+      source: "generic",
+      confidence: 0.96
+    });
+  });
 });

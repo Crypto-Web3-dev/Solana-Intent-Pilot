@@ -26,17 +26,20 @@
 建议使用本地环境文件管理敏感配置：
 
 ```bash
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.4-mini
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openai/gpt-oss-120b:free
 HELIUS_API_KEY=
+PLASMO_PUBLIC_HELIUS_API_KEY=
 QUICKNODE_RPC_URL=
 FALLBACK_RPC_URL=
 JUPITER_API_BASE=https://quote-api.jup.ag
+JUPITER_API_KEY=
 ```
 
 规则：
 
 - 不把真实密钥写进仓库文档或源码
+- 浏览器扩展构建会把 `OPENROUTER_API_KEY` 映射为 `PLASMO_PUBLIC_OPENROUTER_API_KEY`
 - 区分主节点和备用节点
 - 本地和演示环境尽量使用同一套 provider
 
