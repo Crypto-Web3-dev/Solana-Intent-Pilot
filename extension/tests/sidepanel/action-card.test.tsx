@@ -77,13 +77,33 @@ describe("ActionCard", () => {
       />
     );
 
-    expect(html).toContain("Proposed Execution");
+    expect(html).toContain("SOLANA INTENT PILOT");
+    expect(html).toContain("SWAP");
     expect(html).toContain("Direct Swap");
     expect(html).toContain("Est. Impact");
     expect(html).toContain("Estimated Network Fee");
     expect(html).toContain("Simulated OK");
     expect(html).toContain("Confirm &amp; Continue");
     expect(html).toContain("Cancel");
+  });
+
+  it("shows STRATEGY label for atomic bundles", () => {
+    const html = renderToString(
+      <ActionCard
+        preview={{ ...preview, routeLabel: "Atomic Bundle" }}
+        risk={risk("low", 92)}
+        phase="awaiting-signature"
+        reason={null}
+        walletStatus="ready"
+        isSigning={false}
+        onConfirm={() => {}}
+        onCancel={() => {}}
+        onOpenNormalPage={() => {}}
+      />
+    );
+
+    expect(html).toContain("STRATEGY");
+    expect(html).toContain("Atomic Strategy");
   });
 
   it("shows signing message when isSigning is true", () => {

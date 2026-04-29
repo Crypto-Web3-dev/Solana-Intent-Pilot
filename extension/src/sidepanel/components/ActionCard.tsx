@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import type { ExecutionPreview } from "../../shared/execution";
 import type { ClarificationPayload, SIPIntent } from "../../shared/intent";
 import type { SecurityReport } from "../../shared/risk";
@@ -87,9 +88,9 @@ export function ActionCard({
         title: "High risk warning",
         detail: "Serious risk signals were detected. Review the checks above before choosing to continue.",
         button: "Confirm High Risk & Continue",
-        color: "#f87171",
-        background: "rgba(239, 68, 68, 0.08)",
-        border: "rgba(239, 68, 68, 0.24)"
+        color: "#FF4B4B",
+        background: "rgba(255, 75, 75, 0.08)",
+        border: "rgba(255, 75, 75, 0.24)"
       };
     }
 
@@ -206,9 +207,32 @@ export function ActionCard({
   const riskConfirmation = getRiskConfirmation();
 
   return (
-    <div style={{ padding: 16, border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: 16, background: "rgba(255, 255, 255, 0.03)" }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 12, letterSpacing: "0.05em" }}>
-        Proposed Execution
+    <motion.div
+      initial={{ y: 20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: "spring", damping: 25, stiffness: 300 }}
+      style={{ 
+        padding: 16, 
+        border: `1px solid ${risk?.level === "high" ? "rgba(255, 75, 75, 0.3)" : "rgba(255, 255, 255, 0.08)"}`, 
+        borderRadius: 20, 
+        background: risk?.level === "high" ? "rgba(255, 75, 75, 0.05)" : "rgba(255, 255, 255, 0.04)",
+        backdropFilter: "blur(10px)"
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: risk?.level === "high" ? "#FF4B4B" : "#94a3b8", letterSpacing: "0.1em" }}>
+          SOLANA INTENT PILOT
+        </div>
+        <div style={{ 
+          padding: "4px 8px", 
+          borderRadius: 6, 
+          background: risk?.level === "high" ? "rgba(255, 75, 75, 0.1)" : "rgba(255, 255, 255, 0.06)",
+          fontSize: 10,
+          fontWeight: 700,
+          color: risk?.level === "high" ? "#FF4B4B" : "#38bdf8"
+        }}>
+          {preview?.routeLabel === "Atomic Bundle" ? "STRATEGY" : "SWAP"}
+        </div>
       </div>
 
       {preview ? (
@@ -291,8 +315,8 @@ export function ActionCard({
               disabled={isSigning || isDegradedPreview}
               style={{ 
                   flex: 1, padding: "14px", borderRadius: 12, 
-                  background: isDegradedPreview ? "#1e293b" : risk?.level === "high" ? "linear-gradient(135deg, #f87171 0%, #ef4444 100%)" : "linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%)", 
-                  color: isDegradedPreview ? "#64748b" : risk?.level === "high" ? "#450a0a" : "#082f49", 
+                  background: isDegradedPreview ? "#1e293b" : risk?.level === "high" ? "linear-gradient(135deg, #FF4B4B 0%, #ef4444 100%)" : "linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%)", 
+                  color: isDegradedPreview ? "#64748b" : risk?.level === "high" ? "#fff" : "#082f49", 
                   fontWeight: 800, border: 0, cursor: isSigning || isDegradedPreview ? "not-allowed" : "pointer",
                   boxShadow: isDegradedPreview ? "none" : "0 4px 12px rgba(14, 165, 233, 0.2)"
               }}
@@ -320,6 +344,6 @@ export function ActionCard({
           Switch to normal tab
         </button>
       )}
-    </div>
+    </motion.div>
   );
 }
