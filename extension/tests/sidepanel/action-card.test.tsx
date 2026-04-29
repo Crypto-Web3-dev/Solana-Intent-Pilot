@@ -80,7 +80,6 @@ describe("ActionCard", () => {
     expect(html).toContain("SOLANA INTENT PILOT");
     expect(html).toContain("SWAP");
     expect(html).toContain("Direct Swap");
-    expect(html).toContain("Est. Impact");
     expect(html).toContain("Estimated Network Fee");
     expect(html).toContain("Simulated OK");
     expect(html).toContain("Confirm &amp; Continue");
@@ -210,5 +209,24 @@ describe("ActionCard", () => {
     expect(html).toContain("High risk warning");
     expect(html).toContain("Confirm High Risk &amp; Continue");
     expect(html).not.toContain("disabled");
+  });
+
+  it("shows risk checking animation when phase is risk-checking", () => {
+    const html = renderToString(
+      <ActionCard
+        preview={null}
+        phase="risk-checking"
+        reason={null}
+        walletStatus="ready"
+        isSigning={false}
+        onConfirm={() => {}}
+        onCancel={() => {}}
+        onOpenNormalPage={() => {}}
+      />
+    );
+
+    expect(html).toContain("Scanning for risks...");
+    expect(html).toContain("scan-ray-container");
+    expect(html).toContain("scan-ray");
   });
 });

@@ -74,10 +74,10 @@ body {
 
 /* Blink Style Upgrade - Task 1 Added Animations */
 
-/* Scan Ray 动画 */
+/* Scan Ray 閸斻劎鏁 */
 @keyframes scan-ray-move {
-  0% { left: -100%; }
-  100% { left: 100%; }
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
 }
 
 .scan-ray-container {
@@ -88,6 +88,7 @@ body {
 .scan-ray {
   position: absolute;
   top: 0;
+  left: 0;
   height: 100%;
   width: 50%;
   background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.2), transparent);

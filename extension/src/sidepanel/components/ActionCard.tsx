@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { motion } from "framer-motion";
+import confetti from "canvas-confetti";
 import type { ExecutionPreview } from "../../shared/execution";
 import type { ClarificationPayload, SIPIntent } from "../../shared/intent";
 import type { SecurityReport } from "../../shared/risk";
@@ -44,6 +46,17 @@ export function ActionCard({
     /(degraded|failed|not configured|not fully verified)/i.test(
       preview.simulationSummary ?? ""
     );
+
+  useEffect(() => {
+    if (phase === "confirmed") {
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ["#38bdf8", "#10b981", "#9945FF", "#14F195"]
+      });
+    }
+  }, [phase]);
 
   const formatSummary = (summary?: string) => {
     if (!summary) return "Ready to execute.";
@@ -311,8 +324,23 @@ export function ActionCard({
           ) : null}
         </div>
       ) : (
-        <div style={{ margin: "24px 0", textAlign: "center", color: "#64748b", fontSize: 14 }}>
-          {phase === "quoting" || phase === "simulating" ? "Synthesizing strategy..." : "Waiting for intent..."}
+        <div 
+          className={phase === "risk-checking" ? "scan-ray-container" : ""}
+          style={{ 
+            margin: "24px 0", 
+            padding: "24px 0", 
+            textAlign: "center", 
+            color: "#64748b", 
+            fontSize: 14,
+            borderRadius: 16,
+            background: phase === "risk-checking" ? "rgba(56, 189, 248, 0.03)" : "transparent",
+            border: phase === "risk-checking" ? "1px dashed rgba(56, 189, 248, 0.2)" : "none",
+            position: "relative"
+          }}
+        >
+          {phase === "risk-checking" && <div className="scan-ray" />}
+          {phase === "quoting" || phase === "simulating" ? "Synthesizing strategy..." : 
+           phase === "risk-checking" ? "Scanning for risks..." : "Waiting for intent..."}
         </div>
       )}
 
