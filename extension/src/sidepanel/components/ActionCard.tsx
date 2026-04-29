@@ -237,18 +237,40 @@ export function ActionCard({
 
       {preview ? (
         <div style={{ marginBottom: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
             <span style={{ color: "#94a3b8", fontSize: 13 }}>Action</span>
             <span style={{ fontWeight: "600", color: "#38bdf8", fontSize: 13 }}>
                 {preview.routeLabel === "Atomic Bundle" ? "Atomic Strategy" : "Direct Swap"}
             </span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ color: "#94a3b8", fontSize: 13 }}>Est. Impact</span>
-            <span style={{ fontWeight: "600", color: "#f8fafc", fontSize: 13 }}>
-                {formatAmountWithSymbol(preview.inputAmount, inputSymbol, inputDecimals)} → {preview.outputAmount === "Multi" ? "Targets" : formatAmountWithSymbol(preview.outputAmount, outputSymbol, outputDecimals)}
-            </span>
+
+          <div style={{
+            margin: "0 0 16px 0",
+            padding: "16px",
+            background: "rgba(255, 255, 255, 0.03)",
+            borderRadius: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            border: "1px solid rgba(255, 255, 255, 0.05)"
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700 }}>PAY</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: "#9945FF" }}>
+                {formatAmountWithSymbol(preview.inputAmount, inputSymbol, inputDecimals)}
+              </span>
+            </div>
+
+            <div style={{ color: "#64748b", fontSize: 20 }}>➔</div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+              <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700 }}>RECEIVE</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: "#14F195" }}>
+                {preview.outputAmount === "Multi" ? "Targets" : formatAmountWithSymbol(preview.outputAmount, outputSymbol, outputDecimals)}
+              </span>
+            </div>
           </div>
+
           
           <div style={{ 
             marginTop: 12, padding: "10px 12px", background: "rgba(0,0,0,0.25)", 
