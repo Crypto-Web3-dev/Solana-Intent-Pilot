@@ -71,3 +71,36 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.1);
 }
+
+/* Blink Style Upgrade - Task 1 Added Animations */
+
+/* Scan Ray 动画 */
+@keyframes scan-ray-move {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.scan-ray-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.scan-ray {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 50%;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.2), transparent);
+  animation: scan-ray-move 2s infinite linear;
+}
+
+/* 高风险闪烁 */
+@keyframes high-risk-pulse {
+  0% { border-color: rgba(255, 75, 75, 0.2); }
+  50% { border-color: rgba(255, 75, 75, 0.8); box-shadow: 0 0 10px rgba(255, 75, 75, 0.3); }
+  100% { border-color: rgba(255, 75, 75, 0.2); }
+}
+
+.animate-high-risk {
+  animation: high-risk-pulse 1.5s infinite ease-in-out;
+}
