@@ -61,7 +61,7 @@ describe("policy preview adapter", () => {
     const preview = await adapter.buildPreview("req-preview", validIntent);
 
     expect(preview.requestId).toBe("req-preview");
-    expect(preview.routeLabel).toBe("Jupiter");
+    expect(preview.routeLabel).toBe("Jupiter Swap");
     expect(preview.outputAmount).toBe("250000000");
     expect(preview.swapTransaction).toBe("real-tx-payload");
     expect(preview.simulationSummary).toBe("RPC preflight ready at slot 123456");

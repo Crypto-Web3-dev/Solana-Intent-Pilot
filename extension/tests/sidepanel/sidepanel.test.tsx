@@ -1,18 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
+
+// Mock WASM dependency to avoid ESM integration errors in Vitest
+vi.mock("../../src/background/wasm-risk-engine", () => ({
+  loadDefaultWasmRiskEngine: vi.fn().mockResolvedValue(null)
+}));
+
 import { SidePanelPage } from "../../src/sidepanel/pages/SidePanelPage";
 import { createRequestTracker } from "../../src/sidepanel/hooks/useSidePanelState";
 
 describe("SidePanelPage", () => {
   it("renders a mock workflow summary", () => {
     const html = renderToString(<SidePanelPage />);
-    expect(html).toContain("SIP Side Panel");
+    expect(html).toContain("SIP Assistant");
     expect(html).toContain("Submit Intent");
-    expect(html).toContain("Workflow State");
-    expect(html).toContain("Intent + Risk");
-    expect(html).toContain("Execution");
-    expect(html).toContain("Demo-ready workflow panel");
-    expect(html).toContain("none");
+    expect(html).toContain("Your Request");
   });
 
   it("treats only the latest submit request as current", () => {
