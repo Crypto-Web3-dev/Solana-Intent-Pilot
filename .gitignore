@@ -1,5 +1,6 @@
 .codex/
 .pnpm-store/
+.superpowers/
 .worktrees/
 worktrees/
 
