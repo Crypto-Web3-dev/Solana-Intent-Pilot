@@ -3,6 +3,7 @@
 .superpowers/
 .worktrees/
 worktrees/
+docs/
 
 extension/.plasmo/
 extension/build/
@@ -19,4 +20,3 @@ risk-engine/target/
 .env
 AGENTS.md
 GEMINI.md
-
