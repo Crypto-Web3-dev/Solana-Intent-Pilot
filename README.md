@@ -1,6 +1,8 @@
 # Solana Intent Pilot (SIP)
 ### *The Cognitive Interface for Autonomic On-chain Execution*
 
+**Solana Intent Pilot (SIP) is a pioneering AI-native extension redefining the interface between human intelligence and blockchain complexity. By fusing LLM reasoning with a high-performance local Rust safety kernel, SIP transforms abstract goals into secure on-chain actions via natural language. Built as a Manifest V3 side panel, it offers a seamless 'Understand-Verify-Execute' loop. Our vision is to eliminate technical friction, making Web3 a truly intent-driven experience for everyone.**
+
 Solana Intent Pilot (SIP) is a cutting-edge Chrome Extension architecture that pioneers the synthesis of **Natural Language Reasoning**, **Edge-based Risk Validation**, and **High-Fidelity Blockchain Execution**. By abstracting the complexities of fragmented DeFi protocols, SIP empowers users to command the Solana network through pure intent.
 
 ## 1. Paradigm Shift

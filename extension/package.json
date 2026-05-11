@@ -1,6 +1,7 @@
 {
   "name": "sip-extension",
   "displayName": "SIP Extension",
+  "description": "A pioneering AI-native extension redefining the interface between human intelligence and blockchain complexity.",
   "private": true,
   "version": "0.0.1",
   "type": "module",
