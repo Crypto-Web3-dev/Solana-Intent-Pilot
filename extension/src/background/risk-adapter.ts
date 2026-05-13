@@ -287,7 +287,7 @@ async function fetchTokenSecurity(mint: string, fetchImpl: typeof fetch = getDef
   }
 
   if (!HELIUS_KEY && !JUP_KEY) {
-    console.warn("[Risk Adapter] Helius and Jupiter API keys are missing, skipping live security check.");
+    console.warn("[Risk Adapter] Both API keys missing, using mock/fallback security state.");
     return null;
   }
 
