@@ -198,155 +198,45 @@ const DECIMALS_MAP: Record<string, number> = {
   "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263": 5
 };
 
-let tokenListCache: {
-  bySymbol: Map<string, any>;
-  byAddress: Map<string, any>;
-} | null = null;
-const tokenSearchCache = new Map<string, any[]>();
-
 function isStrictSymbolCandidate(key: string) {
   return /^[A-Z0-9]{3,12}$/.test(key.trim().toUpperCase());
-}
-
-function formatClarificationCandidate(token: {
-  symbol?: string;
-  name?: string;
-  mint?: string;
-}) {
-  const symbol = token.symbol?.trim();
-  const mint = token.mint?.trim();
-  if (!symbol || !mint) return null;
-  const name = token.name?.trim() || "Unknown token";
-  return `${symbol} | ${name} | ${mint}`;
-}
-
-function rememberTokenMetadata(metadata: {
-  address: string;
-  symbol: string;
-  decimals?: number;
-  name?: string;
-  icon?: string;
-}) {
-  if (!tokenListCache) {
-    tokenListCache = { bySymbol: new Map(), byAddress: new Map() };
-  }
-
-  tokenListCache.bySymbol.set(metadata.symbol.toUpperCase(), metadata);
-  tokenListCache.byAddress.set(metadata.address, metadata);
-}
-
-async function searchJupiterExactSymbolCandidates(symbol: string): Promise<
-  Array<{
-    mint: string;
-    symbol: string;
-    name?: string;
-    decimals?: number;
-    icon?: string;
-  }>
-> {
-  const normalizedSymbol = symbol.trim().toUpperCase();
-  if (!isStrictSymbolCandidate(normalizedSymbol)) return [];
-  const tokens = await searchJupiterTokens(symbol);
-
-  return tokens
-    .filter((token: any) => typeof token?.symbol === "string" && token.symbol.toUpperCase() === normalizedSymbol)
-    .map((token: any) => ({
-      mint: token.id ?? token.address ?? token.mint,
-      symbol: token.symbol,
-      name: typeof token.name === "string" ? token.name : undefined,
-      decimals: typeof token.decimals === "number" ? token.decimals : undefined,
-      icon: typeof token.icon === "string" ? token.icon : undefined
-    }))
-    .filter((token) => typeof token.mint === "string" && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(token.mint))
-    .map((token) => {
-      rememberTokenMetadata({
-        address: token.mint,
-        symbol: token.symbol,
-        decimals: token.decimals,
-        name: token.name,
-        icon: token.icon
-      });
-      return token;
-    });
 }
 
 async function searchJupiterTokens(query: string): Promise<any[]> {
   const normalizedQuery = query.trim();
   if (!normalizedQuery) return [];
-
-  if (tokenSearchCache.has(normalizedQuery)) {
-    return tokenSearchCache.get(normalizedQuery) ?? [];
-  }
-
   const jupiterApiKey = process.env.PLASMO_PUBLIC_JUPITER_API_KEY;
-
   try {
     const response = await fetch(`https://api.jup.ag/tokens/v2/search?query=${query}`, {
       headers: jupiterApiKey ? { "x-api-key": jupiterApiKey } : undefined
     });
-
-    if (!response.ok) {
-      tokenSearchCache.set(normalizedQuery, []);
-      return [];
-    }
-
+    if (!response.ok) return [];
     const result = await response.json();
-    const tokens = Array.isArray(result) ? result : (result.data || []);
-    tokenSearchCache.set(normalizedQuery, tokens);
-    return tokens;
+    return Array.isArray(result) ? result : (result.data || []);
   } catch (error) {
-    console.error("[AI Token Resolver] Candidate search exception:", error);
-    tokenSearchCache.set(normalizedQuery, []);
     return [];
   }
 }
 
 async function getJupiterTokenMetadata(key: string): Promise<any | null> {
   const normalizedKey = key.toUpperCase();
-  const jupiterApiKey = process.env.PLASMO_PUBLIC_JUPITER_API_KEY;
-
-  if (tokenListCache) {
-    const cached = tokenListCache.bySymbol.get(normalizedKey) || tokenListCache.byAddress.get(key);
-    if (cached) return cached;
-  }
-
   try {
     const tokens = await searchJupiterTokens(key);
     if (tokens.length > 0) {
       const found = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(key)
-        ? tokens.find((t: any) => {
-            const mint = t?.address || t?.mint || t?.id;
-            return typeof mint === "string" && mint === key;
-          })
+        ? tokens.find((t: any) => (t?.address || t?.mint || t?.id) === key)
         : isStrictSymbolCandidate(normalizedKey)
-        ? (() => {
-            const exactMatches = tokens.filter(
-              (t: any) => typeof t?.symbol === "string" && t.symbol.toUpperCase() === normalizedKey
-            );
-            return exactMatches.length === 1 ? exactMatches[0] : null;
-          })()
+        ? tokens.find((t: any) => t?.symbol?.toUpperCase() === normalizedKey)
         : null;
-
-      if (!found) {
-        return null;
-      }
-
-      const address = found.address || found.mint || found.id;
-
-      if (address) {
-        const metadata = {
-          address: address,
+      if (!found) return null;
+      return {
+          address: found.address || found.mint || found.id,
           symbol: found.symbol || key,
           decimals: typeof found.decimals === 'number' ? found.decimals : 9
-        };
-
-        rememberTokenMetadata(metadata);
-
-        return metadata;
-      }
+      };
     }
   } catch (e) {
-    console.error("[AI Token Resolver] Fetch Exception:", e);
+    console.error(e);
   }
   return null;
 }
@@ -364,7 +254,6 @@ async function resolveToken(
   icon?: string;
 }> {
   const normalized = symbolOrMint.toUpperCase();
-
   if (context?.detectedTokens) {
     const found = context.detectedTokens.find(
       (t) => t.symbol?.toUpperCase() === normalized || t.mint === symbolOrMint
@@ -379,27 +268,13 @@ async function resolveToken(
       icon: found.icon
     };
   }
-
   if (MINT_MAP[normalized]) {
     const mint = MINT_MAP[normalized];
     return { mint, decimals: DECIMALS_MAP[mint] ?? 9, symbol: normalized };
   }
-
-  if (tokenListCache?.byAddress.has(symbolOrMint)) {
-    const cachedByAddress = tokenListCache.byAddress.get(symbolOrMint);
-    return {
-      mint: cachedByAddress.address,
-      decimals: typeof cachedByAddress.decimals === "number" ? cachedByAddress.decimals : 9,
-      symbol: cachedByAddress.symbol || symbolOrMint.slice(0, 4),
-      name: cachedByAddress.name,
-      icon: cachedByAddress.icon
-    };
-  }
-
   if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(symbolOrMint)) {
     return { mint: symbolOrMint, decimals: 9, symbol: symbolOrMint.slice(0, 4) };
   }
-
   const official = await getJupiterTokenMetadata(symbolOrMint);
   if (official) return { mint: official.address, decimals: official.decimals, symbol: official.symbol };
   return { mint: "", decimals: 9, symbol: normalized };
@@ -411,11 +286,9 @@ function resolveContextTokenReference(
   forceContextReference = false
 ): string | null {
   if (!forceContextReference && !isContextPronoun(rawToken)) return rawToken;
-
   const candidates = (context?.detectedTokens ?? []).filter(
     (token) => token.verified && (token.mint || token.symbol)
   );
-
   if (forceContextReference && !isContextPronoun(rawToken)) {
     const normalizedRawToken = rawToken.trim().toUpperCase();
     const matchedCandidate = candidates.find(
@@ -424,16 +297,9 @@ function resolveContextTokenReference(
         token.name?.toUpperCase() === normalizedRawToken ||
         token.mint === rawToken
     );
-
-    if (matchedCandidate) {
-      return matchedCandidate.mint ?? matchedCandidate.symbol ?? null;
-    }
+    if (matchedCandidate) return matchedCandidate.mint ?? matchedCandidate.symbol ?? null;
   }
-
-  if (candidates.length !== 1) {
-    return null;
-  }
-
+  if (candidates.length !== 1) return null;
   return candidates[0].mint ?? candidates[0].symbol ?? null;
 }
 
@@ -448,15 +314,8 @@ async function mapToSIPIntent(raw: any, context?: DetectedContextSnapshot, userI
     const buyTokenRaw = String(raw.token || raw.buyToken || raw.outputMint || "USDC");
     const spendTokenRaw = String(raw.amountUnit || raw.inputToken || raw.spendToken || "SOL");
     const rawAmount = raw.amount || "0";
-    const rawSwapMode =
-      raw.swapMode === "ExactOut" || raw.amountTarget === "output" || raw.intentMode === "ExactOut"
-        ? "ExactOut"
-        : "ExactIn";
-    const resolvedBuyTokenRaw = resolveContextTokenReference(
-      buyTokenRaw,
-      context,
-      userInputUsesContextReference(userInput)
-    );
+    const rawSwapMode = raw.swapMode === "ExactOut" || raw.amountTarget === "output" || raw.intentMode === "ExactOut" ? "ExactOut" : "ExactIn";
+    const resolvedBuyTokenRaw = resolveContextTokenReference(buyTokenRaw, context, userInputUsesContextReference(userInput));
     const needsContextClarification = resolvedBuyTokenRaw === null;
 
     const [input, output] = await Promise.all([
@@ -465,22 +324,7 @@ async function mapToSIPIntent(raw: any, context?: DetectedContextSnapshot, userI
     ]);
 
     const isSameToken = input.mint === output.mint;
-    const hasResolvedOutputMint = Boolean(output.mint);
-    const needsOutputResolution = !hasResolvedOutputMint;
-    const ambiguousOutputCandidates =
-      needsOutputResolution && isStrictSymbolCandidate(output.symbol)
-        ? await searchJupiterExactSymbolCandidates(output.symbol)
-        : [];
-    const ambiguousOutputCandidateLabels = ambiguousOutputCandidates
-      .map((candidate) =>
-        formatClarificationCandidate({
-          symbol: candidate.symbol,
-          name: candidate.name,
-          mint: candidate.mint
-        })
-      )
-      .filter((candidate): candidate is string => Boolean(candidate))
-      .slice(0, 8);
+    const needsOutputResolution = !output.mint;
 
     const intent: SIPIntent = {
         intentId: "ai-" + Date.now(),
@@ -488,33 +332,11 @@ async function mapToSIPIntent(raw: any, context?: DetectedContextSnapshot, userI
         mode: "SINGLE",
         metadata: {
             strategyGoal: needsContextClarification || needsOutputResolution ? "Clarification required" : isSameToken ? "Invalid Swap" : `Swap ${input.symbol} to ${output.symbol}`,
-            reasoning: needsContextClarification
-                ? "The request refers to this token, but SIP could not identify exactly one verified page token."
-                : needsOutputResolution
-                ? ambiguousOutputCandidateLabels.length > 0
-                  ? `SIP found multiple verified matches for ${output.symbol}. Please confirm the intended token by name and mint address.`
-                  : `SIP could not uniquely verify the token symbol ${output.symbol}. Please provide a more specific token name or mint address.`
-                : isSameToken
-                ? `You requested to swap ${input.symbol} for itself, which is not a valid transaction. Please select a different target token.`
-                : rawSwapMode === "ExactOut"
-                ? `Executing a decentralized exchange swap. Receiving ${rawAmount || "the requested amount"} ${output.symbol} by spending ${input.symbol} based on your input command.`
-                : `Executing a decentralized exchange swap. Trading ${rawAmount || 'an optimal amount'} ${input.symbol} for ${output.symbol} based on your input command.`,
+            reasoning: needsContextClarification ? "The request refers to this token, but SIP could not identify exactly one verified page token." : needsOutputResolution ? "I could not verify a unique token." : isSameToken ? "Cannot swap a token for itself." : "Swap intent parsed successfully.",
             jitoTipLamports: 1000,
             requiresRiskScan: true,
-            sourceContext: ["user-input"],
-            needsClarification: needsContextClarification || needsOutputResolution || isSameToken,
-            clarification:
-              !needsContextClarification && needsOutputResolution
-                ? {
-                    kind: ambiguousOutputCandidateLabels.length > 0
-                      ? "ambiguous-output-mint"
-                      : "unknown-output-mint",
-                    message: ambiguousOutputCandidateLabels.length > 0
-                      ? `Choose which ${output.symbol} token you want.`
-                      : `I could not verify a unique token for ${output.symbol}.`,
-                    candidateSymbols: ambiguousOutputCandidateLabels
-                  }
-                : undefined
+            sourceContext: buildSourceContext(context),
+            needsClarification: needsContextClarification || needsOutputResolution || isSameToken
         }
     };
 
@@ -525,11 +347,7 @@ async function mapToSIPIntent(raw: any, context?: DetectedContextSnapshot, userI
         payload: {
             inputMint: input.mint,
             outputMint: output.mint,
-            amount: toAtomicAmount(
-              rawAmount,
-              rawSwapMode === "ExactOut" ? output.mint : input.mint,
-              rawSwapMode === "ExactOut" ? output.decimals : input.decimals
-            ),
+            amount: toAtomicAmount(rawAmount, rawSwapMode === "ExactOut" ? output.mint : input.mint, rawSwapMode === "ExactOut" ? output.decimals : input.decimals),
             amountMode: "exact",
             swapMode: rawSwapMode,
             platform: "Jupiter",
@@ -561,42 +379,7 @@ export function normalizeIntentWithContext(
     sourceContext: [],
     needsClarification: false
   };
-
-  const resolvedMint = intent.actions?.[0]?.payload?.outputMint;
-  const isSOL = resolvedMint === MINT_MAP["SOL"];
-  const hasVerifiedOutputCandidate = Boolean(
-    resolvedMint &&
-    context?.detectedTokens.some(
-      (token) => token.verified && token.mint === resolvedMint
-    )
-  );
-  const hasStrongEvidence = !isSOL && resolvedMint && resolvedMint.length > 30;
-
-  const normalizedInput = userInput.trim().toLowerCase();
-  const isGeneric = normalizedInput === "buy" || normalizedInput === "swap" || normalizedInput === "trade" || normalizedInput === "buy this" || normalizedInput === "swap this";
-
-  const needsClarification =
-    (metadata.needsClarification ?? false) ||
-    (hasMultipleTokenCandidates(context) &&
-      !hasVerifiedOutputCandidate &&
-      (!hasStrongEvidence || !hasExplicitTokenMention(userInput))) ||
-    isGeneric;
-
-  const clarification = needsClarification
-    ? metadata.clarification ?? buildClarificationPayload(context, userInput)
-    : undefined;
-
-  return {
-    ...intent,
-    metadata: {
-      ...metadata,
-      reasoning: metadata.reasoning || "Resolved intent with context.",
-      requiresRiskScan: true,
-      needsClarification,
-      clarification,
-      sourceContext: buildSourceContext(context)
-    }
-  };
+  return { ...intent, metadata: { ...metadata, sourceContext: buildSourceContext(context) } };
 }
 
 function buildSystemPrompt() {
@@ -638,7 +421,6 @@ async function readLegacyCompletionContent(
   for await (const chunk of completion) {
     fullContent += chunk.choices?.[0]?.delta?.content || "";
   }
-
   return fullContent;
 }
 
@@ -661,7 +443,6 @@ function extractResponsesText(payload: unknown): string {
     });
 
   if (messageTextParts.length) return messageTextParts.join("");
-
   if (typeof value.content === "string") return value.content;
   if (typeof value.text === "string") return value.text;
   return "";
@@ -798,9 +579,20 @@ export function createOpenAIIntentParser(options?: {
 
       try {
         const parsed = parseModelJson(fullContent);
+        
+        // 防呆拦截：如果 AI 犯傻返回了相同的代币，强制抛出异常走降级逻辑
+        const aiToken = String(parsed.token || parsed.buyToken || parsed.outputMint || "USDC").toUpperCase();
+        const aiAmountUnit = String(parsed.amountUnit || parsed.inputToken || parsed.spendToken || "SOL").toUpperCase();
+        
+        if (aiToken === aiAmountUnit) {
+            console.warn("[AI] Model hallucinated identical input/output tokens. Forcing fallback.");
+            throw new Error("AI hallucinated identical tokens");
+        }
+
         const mapped = await mapToSIPIntent(parsed, context, userInput, userPublicKey);
         return normalizeIntentWithContext(mapped, context, userInput);
       } catch (e) {
+        console.warn("[AI] Falling back to regex parser due to invalid AI output or hallucination.");
         const fallback = parseSimpleSwapCommand(userInput);
         if (fallback) {
           const mapped = await mapToSIPIntent(fallback, context, userInput, userPublicKey);
