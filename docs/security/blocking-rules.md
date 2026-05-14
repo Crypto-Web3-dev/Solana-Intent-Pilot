@@ -1,70 +1,72 @@
-# SIP 阻断规则表
+# SIP Blocking Rules Table
 
-## 1. 目标
+## 1. Goal
 
-本文件定义哪些条件会阻断 SIP 的继续执行，哪些条件只产生警告，避免风险判断在实现过程中漂移。
+This document defines which conditions block SIP execution and which conditions only produce warnings, preventing risk judgments from drifting during implementation.
 
-## 2. 阻断原则
+## 2. Blocking Principles
 
-- 能明确识别为高风险的情况默认阻断
-- 数据缺失优先警告，不轻易伪装成安全
-- 阻断必须可解释，能回溯到具体规则
-- MVP 阶段规则宁可保守，也不要放行明显危险交易
+- Conditions that are clearly identifiable as high risk are blocked by default
+- Missing data is preferentially warned, not easily disguised as safe
+- Blocks must be explainable and traceable to a specific rule
+- In the MVP stage, rules should be conservative rather than allowing clearly dangerous transactions
 
-## 3. 规则清单
+## 3. Rule List
 
-| 规则编号 | 条件 | 默认动作 | 原因 |
+| Rule ID | Condition | Default Action | Reason |
 | --- | --- | --- | --- |
-| `BR-01` | Intent 未通过 schema 校验 | 阻断 | 无法保证执行对象正确 |
-| `BR-03` | `outputMint` 缺失或非法 | 阻断 | 目标资产不明确 |
-| `BR-04` | 检测到 Mint Authority | 阻断 | 存在增发风险 |
-| `BR-05` | 风险评分 `< 50` | 阻断 | 综合风险过高 |
-| `BR-06` | 报价失败且无备用路由 | 阻断 | 无法提供可执行预览 |
-| `BR-07` | 模拟失败 | 阻断 | 无法验证签名前结果 |
-| `BR-08` | 用户未确认签名 | 阻断 | 缺少最终授权 |
+| `BR-01` | Intent fails schema validation | Block | Cannot guarantee correct execution target |
+| `BR-03` | `outputMint` is missing or invalid | Block | Target asset is unclear |
+| `BR-04` | Mint Authority detected | Block | Mint inflation risk exists |
+| `BR-05` | Risk score `< 50` | Block | Overall risk is too high |
+| `BR-06` | Quote fails and no fallback route exists | Block | Cannot provide an executable preview |
+| `BR-07` | Simulation fails | Block | Cannot verify pre-sign result |
+| `BR-08` | User has not confirmed signature | Block | Missing final authorization |
+| `BR-09` | Current page is not in the `SUPPORTED_PAGE_MATCHES` whitelist | Block | Injection target is untrusted; both wallet-detection and signature-submission phases are intercepted |
 
-## 4. 警告规则
+## 4. Warning Rules
 
-| 规则编号 | 条件 | 默认动作 | 原因 |
+| Rule ID | Condition | Default Action | Reason |
 | --- | --- | --- | --- |
-| `WR-01` | `confidence < 0.5` 且 `needsClarification = true` | 澄清 | 信息不足，需要用户补充后再决定 |
-| `WR-02` | `0.5 <= confidence < 0.85` | 警告 | 低置信度，需用户注意 |
-| `WR-03` | 检测到 Freeze Authority | 警告 | MVP 中默认不单独阻断 |
-| `WR-04` | 流动性数据缺失 | 警告 | 无法完整判断退出风险 |
-| `WR-05` | 持仓集中度过高 | 警告 | 存在砸盘风险 |
-| `WR-06` | RPC 响应异常缓慢 | 警告 | 结果可能不稳定 |
+| `WR-01` | `confidence < 0.5` and `needsClarification = true` | Clarify | Insufficient information; user must supplement before a decision can be made |
+| `WR-02` | `0.5 <= confidence < 0.85` | Warn | Low confidence; user attention required |
+| `WR-03` | Freeze Authority detected | Warn | Default in MVP is not to block independently |
+| `WR-04` | Liquidity data is missing | Warn | Cannot fully assess exit risk |
+| `WR-05` | Position concentration is too high | Warn | Dump risk exists |
+| `WR-06` | RPC response is abnormally slow | Warn | Results may be unstable |
 
-补充规则优先级：
+Supplementary rule priorities:
 
-- `confidence < 0.5` 且 `needsClarification = true` 时，优先进入澄清路径，而不是 `blocked`
-- 明确规则阻断优先于评分阈值阻断
-- `Mint Authority` 命中时即使总分未低于阈值，也应阻断
-- `Freeze Authority` 在 MVP 中默认警告，不单独升级为阻断
-- 风险结果为 `unknown` 时默认不直接阻断，但必须附带显著提示，且不得表达为安全
+- When `confidence < 0.5` and `needsClarification = true`, enter the clarification path first rather than `blocked`
+- Explicit rule blocking takes priority over score threshold blocking
+- When `Mint Authority` is hit, block even if the total score has not fallen below the threshold
+- `Freeze Authority` defaults to a warning in MVP and should not be escalated to a block on its own
+- When the risk result is `unknown`, do not block directly by default, but must attach a prominent warning and must not express it as safe
 
-## 5. Override 建议
+## 5. Override Recommendations
 
-MVP 建议：
+MVP recommendations:
 
-- 默认不开放高风险 override
-- 如必须演示 override，只允许在显式二次确认下继续
+- Do not enable high-risk override by default
+- If override must be demonstrated, only allow proceeding under explicit secondary confirmation
 
-如果后续开放 override，建议要求：
+If override is opened later, it is recommended to require:
 
-- 再次确认弹窗
-- 明示触发的阻断规则编号
-- 明示这是用户主动越过安全建议
+- A re-confirmation dialog
+- Clear display of the triggered blocking rule ID
+- Clear indication that the user is voluntarily bypassing the safety recommendation
 
-## 6. UI 要求
+## 6. UI Requirements
 
-- 每次阻断都显示至少一条具体原因
-- 尽量展示对应规则编号，便于调试
-- 不允许只显示“交易失败”而不说明是风控阻断
-- `unknown` 风险结果必须和 `blocked`、`failed` 在视觉上区分
-- 澄清路径必须和 `blocked`、`failed` 在视觉上区分
+- Every block must display at least one specific reason
+- Display the corresponding rule ID where possible for debugging convenience
+- It is not allowed to only show "Transaction failed" without indicating it is a risk block
+- `unknown` risk results must be visually distinct from `blocked` and `failed`
+- `unsupported-page` blocks should display independent copy (e.g., "Supported Page Required") and provide a link to navigate to a supported page
+- The clarification path must be visually distinct from `blocked` and `failed`
 
-## 7. 后续演进
+## 7. Future Evolution
 
-- 为不同 `intent` 类型设置不同阈值
-- 为 trusted token list 设置差异化策略
-- 将阻断规则同步到测试矩阵和 QA 清单
+- Set different thresholds for different `intent` types
+- Set differentiated policies for trusted token lists
+- Sync blocking rules to the test matrix and QA checklist

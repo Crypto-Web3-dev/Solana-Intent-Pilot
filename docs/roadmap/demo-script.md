@@ -1,105 +1,105 @@
-# SIP Demo 脚本
+# SIP Demo Script
 
-## 1. 目标
+## 1. Goal
 
-本文件用于指导 SIP 的 3 分钟演示，让展示重点始终围绕“上下文感知 + AI 意图解析 + 本地风控 + 一键执行”。
+This file guides the 3-minute SIP demo, keeping the presentation focused on "context awareness + AI intent parsing + local risk engine + one-click execution."
 
-## 2. 演示主线
+## 2. Demo Mainline
 
-建议主线：
+Recommended mainline:
 
-1. 在网页中发现一个 token
-2. SIP 自动感知并展示上下文
-3. 用户用自然语言发出交易意图
-4. SIP 展示风险和交易预览
-5. 用户确认签名并完成交易
+1. Discover a token on a web page
+2. SIP automatically senses and displays context
+3. User expresses a trading intent in natural language
+4. SIP shows risk assessment and transaction preview
+5. User confirms signature and completes the transaction
 
-## 3. 推荐脚本
+## 3. Recommended Script
 
-### 3.1 开场
+### 3.1 Opening
 
-可讲：
+Suggested narration:
 
-“Solana 上的操作通常需要在推文、行情页、DEX 和钱包之间来回切换。SIP 想做的是把浏览器直接变成一个 Solana Intent Terminal。”
+"On Solana, you typically need to switch back and forth between tweets, market pages, DEXes, and wallets. What SIP wants to do is turn the browser directly into a Solana Intent Terminal."
 
-### 3.2 页面感知
+### 3.2 Page Awareness
 
-操作：
+Actions:
 
-- 打开包含 token 信息的页面
-- 展示 Detection Bar 或上下文卡片
+- Open a page containing token information
+- Show the Detection Bar or context card
 
-可讲：
+Suggested narration:
 
-“当我在页面上看到一个 token，SIP 不需要我复制粘贴，它会直接感知当前页面的链上线索。”
+"When I see a token on a page, SIP doesn't need me to copy and paste anything. It directly senses the on-chain clues on the current page."
 
-### 3.3 自然语言意图
+### 3.3 Natural Language Intent
 
-操作：
+Actions:
 
-- 输入“买 1 SOL 的这个币”
+- Type "buy 1 SOL of this token"
 
-可讲：
+Suggested narration:
 
-“我不需要切到 DEX 再手动填参数，只需要说出意图。”
+"I don't need to switch to a DEX and manually fill in parameters. I just express my intent."
 
-### 3.4 风险扫描与预览
+### 3.4 Risk Scan & Preview
 
-操作：
+Actions:
 
-- 展示 Risk Indicator
-- 展示 Action Card
+- Show the Risk Indicator
+- Show the Action Card
 
-可讲：
+Suggested narration:
 
-“AI 负责理解我的意思，但是否安全，不由 AI 拍脑袋决定，而是由本地 Wasm 风控引擎先做检查。”
+"AI handles understanding what I mean, but whether it's safe is not decided by AI guessing. Instead, the local Wasm risk engine checks it first."
 
-### 3.5 确认执行
+### 3.5 Confirm & Execute
 
-操作：
+Actions:
 
-- 点击确认
-- 唤起钱包签名
-- 展示成功结果
+- Click confirm
+- Trigger wallet signature
+- Show the success result
 
-可讲：
+Suggested narration:
 
-“确认之后，SIP 会给我一个完整的预览，再由钱包完成最终签名。”
+"After confirming, SIP gives me a complete preview, then the wallet completes the final signature."
 
-## 4. 第二条演示路径：风险阻断
+## 4. Second Demo Path: Risk Block
 
-推荐准备第二条短路径：
+Recommended to prepare a second short path:
 
-- 识别一个高风险 token
-- 输入买入命令
-- 风险扫描结果直接阻断
+- Identify a high-risk token
+- Enter a buy command
+- Risk scan result directly blocks execution
 
-可讲：
+Suggested narration:
 
-“这不是一个只会帮你下单的聊天机器人，它也会在本地扫描到明显风险时阻止你继续执行。”
+"This is not just a chatbot that only places orders for you. It also stops you from proceeding when the local scan detects obvious risks."
 
-说明：
+Notes:
 
-- MVP 演示中不要依赖高风险 override
-- 阻断路径应展示“为什么不能继续”，而不是展示“如何强行继续”
+- Do not rely on high-risk override in the MVP demo
+- The block path should show "why you can't proceed," not "how to force it"
 
-## 5. 演示节奏建议
+## 5. Demo Pacing Suggestions
 
-- 前 30 秒讲问题和产品定位
-- 中间 90 秒跑成功路径
-- 最后 30-45 秒跑风险阻断路径
-- 最后 15 秒总结差异化价值
+- First 30 seconds: explain the problem and product positioning
+- Middle 90 seconds: run the success path
+- Next 30-45 seconds: run the risk block path
+- Final 15 seconds: summarize the differentiated value
 
-## 6. 收尾话术
+## 6. Closing Remarks
 
-可讲：
+Suggested narration:
 
-“所以 SIP 不是把链上交易做成聊天界面这么简单，而是在浏览器里把上下文理解、意图解析、安全校验和执行闭环真正连起来。”
+"So SIP isn't just about putting on-chain trading into a chat interface. It's about truly connecting context understanding, intent parsing, security validation, and execution closed-loop right inside the browser."
 
-## 7. 彩排清单
+## 7. Rehearsal Checklist
 
-- 提前打开目标页面
-- 提前加载扩展和 Side Panel
-- 检查钱包已连接
-- 检查 RPC 和 API Key 可用
-- 准备一条成功路径和一条风险阻断路径
+- Pre-open the target page
+- Pre-load the extension and Side Panel
+- Verify wallet is connected
+- Verify RPC and API Key are available
+- Prepare one success path and one risk block path

@@ -1,62 +1,62 @@
-# SIP 运行时契约总表
+# SIP Runtime Contracts Summary
 
-## 1. 目标
+## 1. Goal
 
-本文件汇总 SIP MVP 阶段最重要的运行时对象和跨模块契约，作为实现 `shared/` 类型、编排逻辑和 UI 消费层的统一参考。
+This document summarizes the most important runtime objects and cross-module contracts for the SIP MVP phase, serving as a unified reference for implementing `shared/` types, orchestration logic, and UI consumption layers.
 
-它不替代已有专题文档，而是把最关键的契约集中到一处，避免实现时在多份文档之间来回拼接。
+It does not replace existing specialized documents, but rather concentrates the most critical contracts in one place, avoiding the need to piece together information from multiple documents during implementation.
 
-## 2. 适用范围
+## 2. Scope
 
-本文件覆盖以下运行时对象：
+This document covers the following runtime objects:
 
-- 页面感知快照
-- Intent 协议
-- 风险报告
-- 执行预览
-- 工作流状态消息
-- 关键运行时枚举
+- Page awareness snapshot
+- Intent protocol
+- Risk report
+- Execution preview
+- Workflow state messages
+- Key runtime enums
 
-不覆盖：
+Not covered:
 
-- Prompt 设计细节
-- Rust 内部实现细节
-- 外部 API 的完整 HTTP 字段
+- Prompt design details
+- Rust internal implementation details
+- Complete HTTP fields of external APIs
 
-## 3. 设计原则
+## 3. Design Principles
 
-- 所有契约都必须可序列化
-- `Background` 是唯一主编排层
-- `Side Panel` 只消费稳定对象，不拼装底层响应
-- 同一语义只保留一个权威类型，不允许 UI 和编排层各自定义半兼容结构
-- 所有对象优先服务于 MVP 的“可校验、可解释、可演示”
+- All contracts must be serializable
+- `Background` is the sole primary orchestration layer
+- `Side Panel` only consumes stable objects, never assembles raw low-level responses
+- Each semantic concept has exactly one authoritative type; UI and orchestration layers must not each define half-compatible structures
+- All objects primarily serve the MVP's "verifiable, explainable, demonstrable" goals
 
-## 4. 关键枚举
+## 4. Key Enums
 
-### 4.1 Intent 类型
+### 4.1 Intent Types
 
 ```ts
 export type IntentType = "SWAP" | "LEND" | "STAKE" | "TRANSFER";
 ```
 
-MVP 规则：
+MVP rules:
 
-- 当前只真正执行 `SWAP`
-- 其它值保留为后续扩展位，不应进入真实执行链
+- Only `SWAP` is actually executed currently
+- Other values are reserved as future extension placeholders and should not enter the real execution chain
 
-### 4.2 金额模式
+### 4.2 Amount Mode
 
 ```ts
 export type AmountMode = "exact" | "half" | "all";
 ```
 
-说明：
+Description:
 
-- `exact`: 已有明确原子单位数量
-- `half`: 基于余额推导一半
-- `all`: 基于余额推导全部
+- `exact`: Has an explicit amount in atomic units
+- `half`: Derived as half of the balance
+- `all`: Derived as the full balance
 
-### 4.3 工作流状态
+### 4.3 Workflow States
 
 ```ts
 export type WorkflowPhase =
@@ -73,12 +73,12 @@ export type WorkflowPhase =
   | "blocked";
 ```
 
-补充规则：
+Additional rules:
 
-- `unknown` 是风险标签，不是工作流状态
-- `needsClarification` 是 Intent 元数据，不是工作流状态
+- `unknown` is a risk label, not a workflow state
+- `needsClarification` is Intent metadata, not a workflow state
 
-### 4.4 工作流原因
+### 4.4 Workflow Reasons
 
 ```ts
 export type WorkflowReason =
@@ -95,23 +95,23 @@ export type WorkflowReason =
   | "confirmed";
 ```
 
-说明：
+Description:
 
-- `reason` 用于解释状态切换原因
-- UI 可以展示对应文案，但不应依赖自由文本做分支判断
+- `reason` is used to explain state transition causes
+- UI can display corresponding copy, but should not rely on free text for branch logic
 
-### 4.5 风险等级
+### 4.5 Risk Levels
 
 ```ts
 export type RiskLevel = "low" | "medium" | "high" | "unknown";
 ```
 
-说明：
+Description:
 
-- `unknown` 表示数据不足，不能伪装成安全
-- `high` 表示高风险或命中明确阻断规则
+- `unknown` indicates insufficient data and must not be disguised as safe
+- `high` indicates high risk or a clear blocking rule match
 
-## 5. 页面感知契约
+## 5. Page Awareness Contract
 
 ```ts
 export interface TokenHint {
@@ -132,48 +132,54 @@ export interface DetectedContextSnapshot {
 }
 ```
 
-约束：
+Constraints:
 
-- 页面内容只提供候选线索，不直接决定交易对象
-- `detectedTokens` 中的 `mint` 可缺失，但下游执行对象不可缺失
-- `detectedAt` 应使用稳定时间格式，便于调试和排序
+- Page content only provides candidate clues and does not directly determine transaction targets
+- `mint` in `detectedTokens` may be missing, but downstream execution objects must not be missing
+- `detectedAt` should use a stable time format for debugging and sorting
 
-## 6. Intent 契约
+## 6. Intent Contract
 
 ```ts
-export interface SIPIntent {
-  intent: IntentType;
-  confidence: number;
-  payload: {
-    inputMint: string;
-    outputMint: string;
-    amount: string;
-    amountMode: AmountMode;
-    slippageBps: number;
-    platform: string;
-  };
-  metadata: {
-    reasoning: string;
-    requiresRiskScan: boolean;
-    sourceContext: string[];
-    needsClarification: boolean;
-  };
+interface SIPIntent {
+  intentId: string;
+  mode: "SINGLE" | "ATOMIC_BUNDLE" | "PARALLEL";
+  actions: SIPAction[];
+  metadata: SIPIntentMetadata;
+}
+
+interface SIPAction {
+  id: string;
+  type: "SWAP" | "STAKE" | "LEND" | "TRANSFER";
+  status: "pending" | "ready" | "failed";
+  payload: SIPActionPayload;
+}
+
+interface SIPIntentMetadata {
+  strategyGoal: string;
+  reasoning: string;
+  jitoTipLamports: number;
+  requiresRiskScan: boolean;
+  sourceContext: string[];
+  needsClarification: boolean;
+  clarification?: ClarificationPayload;
+  riskContext?: RiskContext;
 }
 ```
 
-关键约束：
+Key constraints:
 
-- Intent 必须先通过 schema 校验，再进入执行链
-- `outputMint` 不允许用空字符串占位
-- `needsClarification = true` 时不能进入报价和签名链
-- `confidence` 影响 UI 提示，但不能替代结构和业务校验
+- Intent must pass schema validation before entering the execution chain
+- `outputMint` must not use an empty string as a placeholder
+- When `needsClarification = true`, must not enter the quote and signing chain
+- `confidence` affects UI prompts but cannot replace structural and business validation
 
-MVP 推荐业务规则：
+Recommended MVP business rules:
 
-- `intent !== "SWAP"` 时只展示解析结果，不进入真实执行链
-- `inputMint === outputMint` 时直接视为无效 intent
+- When action type is not `SWAP`, only display the parsed result without entering the real execution chain
+- When `inputMint === outputMint`, treat it as an invalid intent
 
-## 7. 风险报告契约
+## 7. Risk Report Contract
 
 ```ts
 export interface SecurityReport {
@@ -191,22 +197,22 @@ export interface SecurityReport {
 }
 ```
 
-字段语义：
+Field semantics:
 
-- `score`: 供 UI 和调试使用的综合分值
-- `level`: 面向用户展示的风险等级
-- `source`: 当前风险结果来自 Wasm 还是策略回退
-- `blocking`: 是否阻断当前执行流程
-- `checks`: 具体检查项明细
-- `summary`: 给 UI 直接展示的摘要
+- `score`: Composite score for UI and debugging purposes
+- `level`: Risk level displayed to the user
+- `source`: Whether the current risk result comes from Wasm or policy fallback
+- `blocking`: Whether to block the current execution flow (note: Wasm always returns `blocking: false`; the policy layer in `risk-adapter.ts` applies blocking rules on top of the Wasm output)
+- `checks`: Detailed individual check items
+- `summary`: Summary for direct UI display
 
-关键约束：
+Key constraints:
 
-- `blocking = true` 时必须至少有一个可解释的失败原因
-- `level = "unknown"` 时不得展示为已通过检查
-- `Freeze Authority` 在 MVP 中默认只警告，不单独阻断
+- When `blocking = true`, there must be at least one explainable failure reason (set by the policy layer, not Wasm)
+- When `level = "unknown"`, must not be displayed as having passed checks
+- `Freeze Authority` in MVP defaults to warning only, does not independently block
 
-## 8. 执行预览契约
+## 8. Execution Preview Contract
 
 ```ts
 export interface ExecutionPreview {
@@ -220,40 +226,43 @@ export interface ExecutionPreview {
 }
 ```
 
-说明：
+Description:
 
-- 这是给 UI 直接消费的预览结果对象
-- 可以来源于 Jupiter、simulate 和本地格式化逻辑的组合
-- 不要求把底层原始响应全部暴露给 UI
+- This is the preview result object for direct UI consumption
+- Can be sourced from a combination of Jupiter, simulation, and local formatting logic
+- Does not require exposing all underlying raw responses to the UI
 
-关键约束：
+Key constraints:
 
-- 预览对象必须在签名前可读、可解释
-- 报价成功但模拟失败时，不得伪装成可执行预览
-- `requestId` 必须和当前工作流保持一致
+- Preview objects must be readable and explainable before signing
+- When quoting succeeds but simulation fails, must not be disguised as an executable preview
+- `requestId` must be consistent with the current workflow
 
-## 9. 工作流状态消息契约
+## 9. Workflow State Message Contract
 
 ```ts
 export interface WorkflowStateChangedMessage {
   type: "workflow.state.changed";
   payload: {
-    requestId: string;
-    phase: WorkflowPhase;
-    reason?: WorkflowReason | string;
+    previous: WorkflowPhase;
+    current: WorkflowPhase;
+    reason?: WorkflowReason;
+    intent?: SIPIntent;
+    riskReport?: SecurityReport;
+    preview?: ExecutionPreview;
   };
 }
 ```
 
-关键约束：
+Key constraints:
 
-- `workflow.state.changed` 是 UI 消费状态的权威来源
-- 所有跨状态迁移都应尽量附带 `reason`
-- `reason` 优先使用稳定枚举，再回退到自由文本
+- `workflow.state.changed` is the authoritative source for UI state consumption
+- All state transitions should ideally include a `reason`
+- `reason` should prefer stable enums, falling back to free text
 
-## 10. 其它关键消息
+## 10. Other Key Messages
 
-### 10.1 Intent 请求
+### 10.1 Intent Request
 
 ```ts
 export interface IntentParseRequestedMessage {
@@ -267,7 +276,7 @@ export interface IntentParseRequestedMessage {
 }
 ```
 
-### 10.2 风险扫描完成
+### 10.2 Risk Scan Completed
 
 ```ts
 export interface RiskScanCompletedMessage {
@@ -279,7 +288,7 @@ export interface RiskScanCompletedMessage {
 }
 ```
 
-### 10.3 执行预览完成
+### 10.3 Execution Preview Ready
 
 ```ts
 export interface ExecutionPreviewReadyMessage {
@@ -288,7 +297,7 @@ export interface ExecutionPreviewReadyMessage {
 }
 ```
 
-### 10.4 交易已提交
+### 10.4 Transaction Submitted
 
 ```ts
 export interface TransactionSubmittedMessage {
@@ -300,7 +309,7 @@ export interface TransactionSubmittedMessage {
 }
 ```
 
-### 10.5 签名已取消
+### 10.5 Signature Cancelled
 
 ```ts
 export interface ExecutionCancelledMessage {
@@ -311,7 +320,7 @@ export interface ExecutionCancelledMessage {
 }
 ```
 
-### 10.6 交易提交失败
+### 10.6 Transaction Submission Failed
 
 ```ts
 export interface TransactionFailedMessage {
@@ -323,7 +332,7 @@ export interface TransactionFailedMessage {
 }
 ```
 
-### 10.7 交易已确认
+### 10.7 Transaction Confirmed
 
 ```ts
 export interface TransactionSettledMessage {
@@ -337,9 +346,9 @@ export interface TransactionSettledMessage {
 }
 ```
 
-## 11. 推荐 shared 类型落点
+## 11. Recommended shared Type File Layout
 
-建议实现时按以下方式组织：
+It is recommended to organize the implementation as follows:
 
 ```text
 extension/src/shared/
@@ -348,29 +357,33 @@ extension/src/shared/
 ├── risk.ts
 ├── execution.ts
 ├── workflow.ts
-└── messages.ts
+├── messages.ts
+├── supported-pages.ts
+└── demo-mode.ts
 ```
 
-推荐职责：
+Recommended responsibilities:
 
-- `context.ts`: `TokenHint`、`DetectedContextSnapshot`
-- `intent.ts`: `IntentType`、`AmountMode`、`SIPIntent`
-- `risk.ts`: `RiskLevel`、`SecurityReport`
+- `context.ts`: `TokenHint`, `DetectedContextSnapshot`
+- `intent.ts`: `SIPIntent`, `SIPAction`, `SIPIntentMetadata`, `ClarificationPayload`, `IntentMode`
+- `risk.ts`: `RiskLevel`, `RiskEngineSource`, `SecurityReport`, `SecurityCheck`
 - `execution.ts`: `ExecutionPreview`
-- `workflow.ts`: `WorkflowPhase`、`WorkflowReason`
-- `messages.ts`: 各类消息接口和联合类型
+- `workflow.ts`: `WorkflowPhase`, `WorkflowReason`
+- `messages.ts`: All message interfaces, `SIPRuntimeMessage` union type
+- `supported-pages.ts`: `SUPPORTED_PAGE_MATCHES`, `SUPPORTED_PAGE_REGEXES`, `isSupportedPageUrl()`
+- `demo-mode.ts`: Demo mode utilities: Various message interfaces and union types
 
-## 12. 校验与实现建议
+## 12. Validation and Implementation Recommendations
 
-- 先把这些契约落到 `shared/`，再写 Background 编排
-- 不要在 UI 组件 props 里重新发明一套近似类型
-- 所有外部返回结果都先映射成本文定义的稳定对象，再传给 UI
-- 对同一 `requestId` 的消息流做日志串联，便于调试
+- Implement these contracts in `shared/` first, then write Background orchestration
+- Do not reinvent approximate types in UI component props
+- Map all external return results to the stable objects defined in this document before passing to UI
+- Log-correlate messages for the same `requestId` for easier debugging
 
-## 13. 与其它文档的关系
+## 13. Relationship to Other Documents
 
-- 与 [intent-schema.md](./intent-schema.md) 对齐 Intent 字段和校验要求
-- 与 [message-types.md](./message-types.md) 对齐消息结构
-- 与 [../security/risk-engine.md](../security/risk-engine.md) 对齐风险报告
-- 与 [../architecture/workflow-state-machine.md](../architecture/workflow-state-machine.md) 对齐状态与转移
-- 与 [ui-state-mapping.md](./ui-state-mapping.md) 对齐 UI 消费语义
+- Aligns with [intent-schema.md](./intent-schema.md) on Intent fields and validation requirements
+- Aligns with [message-types.md](./message-types.md) on message structures
+- Aligns with [../security/risk-engine.md](../security/risk-engine.md) on risk reports
+- Aligns with [../architecture/workflow-state-machine.md](../architecture/workflow-state-machine.md) on states and transitions
+- Aligns with [ui-state-mapping.md](./ui-state-mapping.md) on UI consumption semantics

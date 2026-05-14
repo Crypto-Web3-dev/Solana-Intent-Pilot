@@ -1,47 +1,47 @@
-# SIP Demo 检查清单
+# SIP Demo Checklist
 
-## 1. 演示前环境
+## 1. Pre-Demo Environment
 
-- [ ] Chrome / Chromium 已打开
-- [ ] 扩展已加载且版本正确
-- [ ] Side Panel 已打开
-- [ ] 钱包已连接
-- [ ] 主 RPC 可用
-- [ ] 备用 RPC 可用
-- [ ] API Key 可用
+- [ ] Chrome / Chromium is open
+- [ ] Extension is loaded with the correct version
+- [ ] Side Panel is open
+- [ ] Wallet is connected
+- [ ] Primary RPC is available
+- [ ] Backup RPC is available
+- [ ] API Key is available
 
-## 2. 演示素材
+## 2. Demo Materials
 
-- [ ] 目标页面已准备好
-- [ ] 成功路径 token 已准备好
-- [ ] 风险阻断 token 已准备好
-- [ ] 演示输入文案已确认
-- [ ] 收尾话术已准备
+- [ ] Target page is ready
+- [ ] Success path token is ready
+- [ ] Risk block token is ready
+- [ ] Demo input text is confirmed
+- [ ] Closing remarks are prepared
 
-## 3. 产品状态
+## 3. Product State
 
-- [ ] Detection Bar 可正常展示
-- [ ] ChatThread 状态正常
-- [ ] RiskIndicator 正常显示
-- [ ] Action Card 正常显示
-- [ ] 成功态与阻断态都已验证
+- [ ] Detection Bar displays correctly
+- [ ] ChatThread state is normal
+- [ ] RiskIndicator displays correctly
+- [ ] Action Card displays correctly
+- [ ] Both success and blocked states are verified
 
-## 4. 演示节奏
+## 4. Demo Pacing
 
-- [ ] 开场控制在 30 秒内
-- [ ] 成功路径控制在 90 秒左右
-- [ ] 风险阻断路径控制在 30-45 秒
-- [ ] 总时长不超过 3 分钟
+- [ ] Opening kept within 30 seconds
+- [ ] Success path kept around 90 seconds
+- [ ] Risk block path kept within 30-45 seconds
+- [ ] Total duration does not exceed 3 minutes
 
-## 5. 风险预案
+## 5. Contingency Plan
 
-- [ ] 如果真实 API 不稳定，有静态 mock 方案
-- [ ] 如果钱包签名不稳定，有录屏或备用演示方案
-- [ ] 如果页面检测失败，有备用页面
-- [ ] 如果报价失败，有备用 token
+- [ ] If the real API is unstable, a static mock fallback is available
+- [ ] If wallet signing is unstable, a screen recording or backup demo plan is available
+- [ ] If page detection fails, a backup page is available
+- [ ] If quoting fails, a backup token is available
 
-## 6. 演示后检查
+## 6. Post-Demo Review
 
-- [ ] 记录本次演示中出现的问题
-- [ ] 更新测试报告
-- [ ] 更新 Demo 脚本或话术
+- [ ] Record issues encountered during this demo
+- [ ] Update test report
+- [ ] Update Demo script or talking points

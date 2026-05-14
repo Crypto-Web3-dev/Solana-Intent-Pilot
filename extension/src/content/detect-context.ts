@@ -1,21 +1,28 @@
 import type { DetectedContextSnapshot, TokenHint } from "../shared/context";
 
-/**
- * 增强型环境雷达 (Context Radar) + 钱包桥接注册
- * 负责在用户浏览任何页面时，静默提取高价值的代币线索
- */
+const MAX_BODY_TEXT_CHARS = 600;
+const MAX_SELECTED_TEXT_CHARS = 120;
+const MAX_RAW_HINTS = 2;
+const MAX_RAW_HINT_CHARS = 80;
+const MAX_TEXT_ADDRESSES = 2;
+const MAX_TEXT_TICKERS = 2;
+const MAX_DETECTED_TOKENS = 8;
 
 export function registerWalletBridge() {
   console.log("[SIP] Wallet Bridge Registered in Content Script");
 }
 
+function normalizeText(value: string, maxChars: number) {
+  return value.replace(/\s+/g, " ").trim().slice(0, maxChars);
+}
+
 function getSelectedText(): string {
   if (typeof window === "undefined") return "";
-  return window.getSelection()?.toString().trim() || "";
+  return normalizeText(window.getSelection()?.toString() ?? "", MAX_SELECTED_TEXT_CHARS);
 }
 
 function detectSource(url: string): TokenHint["source"] {
-  if (url.includes("x.com")) return "twitter";
+  if (url.includes("x.com") || url.includes("twitter.com")) return "twitter";
   if (url.includes("dexscreener")) return "dexscreener";
   return "generic";
 }
@@ -25,9 +32,7 @@ function pushUniqueHint(hints: TokenHint[], hint: TokenHint) {
   if (!key) return;
 
   const existing = hints.find((candidate) =>
-    hint.mint
-      ? candidate.mint === hint.mint
-      : candidate.symbol === hint.symbol
+    hint.mint ? candidate.mint === hint.mint : candidate.symbol === hint.symbol
   );
 
   if (!existing) {
@@ -44,7 +49,8 @@ function detectLinkMints(): string[] {
   return links
     .map((link) => link.getAttribute("href") ?? "")
     .map((href) => href.match(/\/(?:token|coin)\/([1-9A-HJ-NP-Za-km-z]{32,44})/)?.[1])
-    .filter((mint): mint is string => Boolean(mint));
+    .filter((mint): mint is string => Boolean(mint))
+    .slice(0, MAX_TEXT_ADDRESSES);
 }
 
 function detectSelectedSymbol(selectedText: string): string | null {
@@ -74,51 +80,48 @@ function detectTokenHints(url: string, text: string, selectedText: string): Toke
   }
 
   const addressRegex = /\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g;
-  const addresses = text.match(addressRegex) || [];
+  const addresses = Array.from(new Set(text.match(addressRegex) || [])).slice(0, MAX_TEXT_ADDRESSES);
 
   const tickerRegex = /\$[A-Z]{2,10}\b/g;
-  const tickers = text.match(tickerRegex) || [];
+  const tickers = Array.from(new Set(text.match(tickerRegex) || [])).slice(0, MAX_TEXT_TICKERS);
 
-  Array.from(new Set(addresses)).forEach(addr => {
-      pushUniqueHint(hints, { mint: addr, source, confidence: 0.74 });
+  addresses.forEach((mint) => {
+    pushUniqueHint(hints, { mint, source, confidence: 0.74 });
   });
 
-  Array.from(new Set(tickers)).forEach(t => {
-      pushUniqueHint(hints, { symbol: t.replace("$", ""), source, confidence: 0.82 });
+  tickers.forEach((ticker) => {
+    pushUniqueHint(hints, { symbol: ticker.replace("$", ""), source, confidence: 0.82 });
   });
 
   if (source === "generic") {
-    const commonSymbols = text.match(/\b(USDC|USDT|PUMP|JUP|BONK|WIF)\b/g) || [];
-    Array.from(new Set(commonSymbols)).forEach((symbol) => {
+    const commonSymbols = Array.from(new Set(text.match(/\b(USDC|USDT|PUMP|JUP|BONK|WIF)\b/g) || []));
+    commonSymbols.forEach((symbol) => {
       pushUniqueHint(hints, { symbol, source, confidence: 0.76 });
     });
   }
 
-  return hints.slice(0, 8);
+  return hints.slice(0, MAX_DETECTED_TOKENS);
 }
 
 function extractRawHints(): string[] {
-  const hints: string[] = [];
-  const metaDesc = document.querySelector('meta[name="description"]')?.getAttribute("content");
-  if (metaDesc) hints.push(`Desc: ${metaDesc.substring(0, 100)}`);
-
-  const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute("content");
-  if (ogTitle) hints.push(ogTitle);
+  const hints = [
+    document.querySelector('meta[name="description"]')?.getAttribute("content") ?? "",
+    document.querySelector('meta[property="og:title"]')?.getAttribute("content") ?? ""
+  ]
+    .map((value) => normalizeText(value, MAX_RAW_HINT_CHARS))
+    .filter(Boolean)
+    .slice(0, MAX_RAW_HINTS);
 
   return hints;
 }
 
-export function captureContext(): any {
-  const bodyText = document.body?.innerText || "";
-  const sampleText = bodyText.substring(0, 5000);
+export function captureContext(): DetectedContextSnapshot & { payload: DetectedContextSnapshot } {
+  const bodyText = normalizeText(document.body?.innerText || "", MAX_BODY_TEXT_CHARS);
   const selectedText = getSelectedText();
-  const hints = detectTokenHints(window.location.href, sampleText, selectedText);
-  const rawHints = extractRawHints();
-
-  const snapshot = {
+  const snapshot: DetectedContextSnapshot = {
     selectedText: selectedText || undefined,
-    detectedTokens: hints,
-    rawHints,
+    detectedTokens: detectTokenHints(window.location.href, bodyText, selectedText),
+    rawHints: extractRawHints(),
     detectedAt: new Date().toISOString()
   };
 
@@ -136,13 +139,27 @@ export function createContextDetectedMessage() {
   };
 }
 
-// 监听来自侧边栏的请求
+function isTrustedSender(sender: { id?: string } | undefined) {
+  if (typeof chrome === "undefined" || !chrome.runtime?.id) {
+    return true;
+  }
+
+  return !sender?.id || sender.id === chrome.runtime.id;
+}
+
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    // 统一消息类型名
-    if (message.type === "context.request_scan" || message.type === "context.snapshot.requested") {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!isTrustedSender(sender)) {
+      return false;
+    }
+
+    if (
+      message?.type === "context.request_scan" ||
+      message?.type === "context.snapshot.requested"
+    ) {
       sendResponse(captureContext());
     }
+
     return true;
   });
 }

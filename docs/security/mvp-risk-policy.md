@@ -1,245 +1,251 @@
-# SIP MVP 风险策略
+# SIP MVP Risk Policy
 
-## 1. 目标
+## 1. Purpose
 
-本文件定义 SIP 在 MVP 阶段的统一风险策略，用来回答以下问题：
+This document defines the unified risk policy for SIP in the MVP stage, answering:
 
-- 哪些情况必须阻断
-- 哪些情况只警告，不阻断
-- `unknown` 风险结果如何处理
-- 是否允许继续预览、继续签名或绕过风险建议
+- Which conditions must block
+- Which conditions only warn without blocking
+- How `unknown` risk results are handled
+- Whether preview, signing, or overriding risk advice is allowed
 
-本文件是 MVP 风险决策的单页口径，优先级高于散落在其它文档中的描述性表述。
+This document is the single-page authority for MVP risk decisions, taking priority over descriptive statements scattered across other documents.
 
-## 2. 策略范围
+## 2. Policy Scope
 
-本策略适用于：
+This policy applies to:
 
-- `SWAP` 意图的风险扫描结果
-- 页面发现 token 后的本地风险判断
-- Action Card 的可继续、警告和阻断决策
-- Demo 与测试中的风险预期
+- Risk scan results for `SWAP` intents
+- Local risk judgments after tokens are discovered on a page
+- Action Card proceed, warn, and block decisions
+- Risk expectations in demos and tests
 
-本策略不覆盖：
+This policy does not cover:
 
-- 生产级全协议风控
-- 黑名单治理与信誉系统
-- 多步复合交易的跨步骤风险评估
+- Production-grade full-protocol risk control
+- Blacklist governance and reputation systems
+- Cross-step risk assessment for multi-step composite transactions
 
-## 3. 决策原则
+MVP security controls include:
 
-- 明确高风险优先阻断，不做“发现风险但继续默认放行”
-- 数据不足时优先诚实表达，不伪装成安全
-- 策略阻断和系统失败必须区分
-- LLM 只能提供解释，不能提供安全背书
-- MVP 默认不开放 high-risk override
+- Page allowlist (`SUPPORTED_PAGE_MATCHES`): restricts content-script injection, page-context selection, and signable-tab injection to a fixed set of domains
+- Input bounding constraints (`detect-context.ts`): body text, selected text, raw hints, address counts, and ticker counts all have hard upper limits
+- Unsupported-page blocking: `unsupported-page` as an explicit `blocked` reason with a navigation entry to a supported page
 
-## 4. 风险决策输出
+## 3. Decision Principles
 
-风险引擎最终必须输出这三个面向策略的结论：
+- Clear high-risk conditions are blocked with priority; no "risk detected but proceed by default"
+- When data is insufficient, prioritize honest expression over fabricating safety
+- Policy blocks and system failures must be distinguished
+- LLMs can only provide explanations, not security endorsements
+- MVP does not enable high-risk override by default
+
+## 4. Risk Decision Output
+
+The risk engine must ultimately produce these policy-facing conclusions:
 
 - `level`
 - `blocking`
 - `checks`
 
-推荐理解方式：
+Recommended interpretation:
 
-- `level`: 给用户看的风险等级
-- `source`: 给用户看的风险引擎来源，区分 `wasm` 与 `policy-fallback`
-- `blocking`: 给工作流看的是否阻断
-- `checks`: 给 UI 和调试看的具体原因
+- `level`: risk level displayed to the user
+- `source`: risk engine source displayed to the user, distinguishing `wasm` from `policy-fallback`
+- `blocking`: whether to block, consumed by the workflow
+- `checks`: specific reasons for UI and debugging
 
-## 5. 风险等级定义
+## 5. Risk Level Definitions
 
 ### 5.1 `low`
 
-含义：
+Meaning:
 
-- 当前已完成的检查没有发现显著风险
+- Completed checks found no significant risk
 
-MVP 动作：
+MVP action:
 
-- 允许继续预览
-- 允许进入签名链
+- Allow continued preview
+- Allow entering the signing pipeline
 
 ### 5.2 `medium`
 
-含义：
+Meaning:
 
-- 存在值得提示的风险，但未达到默认阻断阈值
+- Risks worth noting exist, but below the default blocking threshold
 
-MVP 动作：
+MVP action:
 
-- 允许继续预览
-- 允许进入签名链
-- 必须在 UI 中给出清晰警示
+- Allow continued preview
+- Allow entering the signing pipeline
+- Must show a clear warning in the UI
 
 ### 5.3 `high`
 
-含义：
+Meaning:
 
-- 命中明确阻断规则，或综合风险已达到高风险阈值
+- An explicit blocking rule was hit, or composite risk reached the high-risk threshold
 
-MVP 动作：
+MVP action:
 
-- 默认阻断
-- 不允许进入签名链
-- 主 CTA 禁用，仅允许取消或返回
+- Block by default
+- Do not allow entering the signing pipeline
+- Primary CTA disabled; only cancel or back allowed
 
 ### 5.4 `unknown`
 
-含义：
+Meaning:
 
-- 数据不足，无法完成最小可信判断
+- Insufficient data to complete a minimum credible judgment
 
-MVP 动作：
+MVP action:
 
-- 不直接等同于 `high`
-- 默认允许继续预览
-- 是否允许进入签名链，取决于当前是否仍满足最小检查覆盖
-- 必须以显著方式提示“数据不足，不代表安全”
+- Not directly equivalent to `high`
+- Allow continued preview by default
+- Whether entering the signing pipeline is allowed depends on whether minimum check coverage is still met
+- Must prominently indicate "insufficient data, does not mean safe"
 
-## 6. MVP 阻断策略
+## 6. MVP Blocking Strategy
 
-### 6.1 明确规则阻断
+### 6.1 Explicit Rule Blocking
 
-以下情况命中时，优先直接阻断：
+The following conditions are blocked with priority when hit:
 
-- Intent 未通过 schema 校验
-- `outputMint` 缺失或非法
-- 检测到 `Mint Authority`
-- 风险评分 `< 50`
-- 报价失败且无备用路由
-- 模拟失败
+- Intent fails schema validation
+- `outputMint` missing or invalid
+- `Mint Authority` detected
+- Risk score `< 50`
+- Quote failed with no fallback route
+- Simulation failed
 
-说明：
+Note:
 
-- 明确规则阻断优先于评分解释
-- 只要命中阻断规则，即使其它信号较好，也不应放行
+- Explicit rule blocking takes priority over score interpretation
+- When a blocking rule is hit, even if other signals are favorable, the transaction must not be allowed
 
-### 6.2 评分阻断
+### 6.2 Score Blocking
 
-当没有命中更高优先级规则时：
+When no higher-priority rule is hit:
 
-- `score < 50` 视为 `high`
-- 默认 `blocking = true`
+- `score < 50` is treated as `high`
+- `blocking = true` by default
 
-### 6.3 非阻断警告
+### 6.3 Non-Blocking Warnings
 
-以下情况在 MVP 中默认只警告：
+The following conditions only warn by default in MVP:
 
-- `confidence < 0.5` 且 `needsClarification = true`
+- `confidence < 0.5` and `needsClarification = true`
 - `0.5 <= confidence < 0.85`
-- 检测到 `Freeze Authority`
-- 流动性数据缺失
-- 持仓集中度过高
-- RPC 响应异常缓慢
+- `Freeze Authority` detected
+- Liquidity data missing
+- Holder concentration too high
+- RPC response unusually slow
 
-## 7. `unknown` 策略
+## 7. `unknown` Policy
 
-### 7.1 何时标记为 `unknown`
+### 7.1 When to Mark as `unknown`
 
-当满足以下条件时，应优先返回 `unknown`：
+`unknown` should be returned with priority when:
 
-- 缺失流动性或 holder 等关键辅助数据
-- 无法完成最低检查覆盖
-- 无法得出“安全”或“高风险”的可信结论
+- Key auxiliary data such as liquidity or holders is missing
+- Minimum check coverage cannot be completed
+- A credible conclusion of "safe" or "high risk" cannot be reached
 
-### 7.2 `unknown` 的默认动作
+### 7.2 `unknown` Default Action
 
-MVP 默认规则：
+MVP default rules:
 
-- `unknown` 不直接触发阻断
-- `unknown` 不得映射成 `low`
-- `unknown` 允许继续查看预览
-- `unknown` 进入签名链前，UI 必须再次清楚表达“当前判断不完整”
+- `unknown` does not directly trigger blocking
+- `unknown` must not be mapped to `low`
+- `unknown` allows continued preview
+- Before `unknown` enters the signing pipeline, the UI must again clearly indicate "current judgment is incomplete"
 
-### 7.3 `unknown` 的 UI 要求
+### 7.3 `unknown` UI Requirements
 
-UI 必须做到：
+The UI must:
 
-- 与 `high` 视觉区分
-- 与 `failed` 视觉区分
-- 明示“数据不足”而不是“轻微风险”
+- Be visually distinct from `high`
+- Be visually distinct from `failed`
+- Display "insufficient data" rather than "minor risk"
 
-推荐文案：
+Recommended copy:
 
-- `部分风险数据暂不可用，请谨慎判断`
-- `当前只能完成部分检查，结果不代表资产安全`
+- `Some risk data is currently unavailable; please judge carefully`
+- `Only partial checks could be completed; this result does not guarantee asset safety`
 
-## 8. 规则优先级
+## 8. Rule Priority
 
-MVP 中采用以下优先级：
+MVP uses the following priority order:
 
-1. 结构非法和执行前置条件失败
-2. 明确阻断规则
-3. 评分阈值阻断
-4. `unknown` 数据不足提示
-5. 普通警告
+1. Structural invalidity and execution precondition failure
+2. Explicit blocking rules
+3. Score threshold blocking
+4. `unknown` insufficient data notice
+5. Ordinary warnings
 
-解释：
+Explanation:
 
-- 结构非法和执行前置条件失败属于“不能执行”
-- 明确阻断规则属于“策略禁止”
-- `unknown` 属于“信息不完整”
-- 低置信度澄清属于“需要补充信息后再决定”
-- 普通警告属于“可以继续，但需提醒”
+- Structural invalidity and execution precondition failure mean "cannot execute"
+- Explicit blocking rules mean "policy forbids"
+- `unknown` means "information is incomplete"
+- Low-confidence clarification means "need more information before deciding"
+- Ordinary warnings mean "may proceed, but be reminded"
 
-## 9. 允许继续的边界
+## 9. Boundaries for Proceeding
 
-### 9.1 允许继续预览
+### 9.1 Allow Continued Preview
 
-以下情况允许继续进入预览：
-
-- `level = low`
-- `level = medium`
-- `level = unknown` 且未命中明确阻断规则
-
-### 9.2 允许继续签名
-
-以下情况允许进入签名链：
+The following conditions allow continued preview:
 
 - `level = low`
 - `level = medium`
-- `level = unknown` 且：
-  - Intent 合法
-  - 风险检查已完成
-  - 未命中明确阻断规则
-  - UI 已显著提示风险数据不足
+- `level = unknown` with no explicit blocking rule hit
 
-### 9.3 不允许继续签名
+### 9.2 Allow Continued Signing
 
-以下情况不允许进入签名链：
+The following conditions allow entering the signing pipeline:
+
+- `level = low`
+- `level = medium`
+- `level = unknown` and:
+  - Intent is valid
+  - Risk checks have been completed
+  - No explicit blocking rule was hit
+  - UI has prominently warned about insufficient risk data
+
+### 9.3 Do Not Allow Continued Signing
+
+The following conditions do not allow entering the signing pipeline:
 
 - `blocking = true`
-- 结构非法
+- Structural invalidity
 - `needsClarification = true`
-- quote 或 simulate 失败
-- 用户未确认
+- Quote or simulate failure
+- User has not confirmed
 
-## 10. Override 策略
+## 10. Override Policy
 
-MVP 结论：
+MVP conclusion:
 
-- 默认不开放 high-risk override
+- High-risk override is not enabled by default
 
-因此：
+Therefore:
 
-- `blocked` 状态下不提供“继续交易”按钮
-- Demo 不依赖 override
-- 测试不要求覆盖 override 交互
+- No "proceed with transaction" button in `blocked` state
+- Demo does not depend on override
+- Tests are not required to cover override interactions
 
-如后续开放 override，最低要求应包括：
+If override is opened in the future, minimum requirements should include:
 
-- 二次确认
-- 展示规则编号
-- 明示这是用户主动越过安全建议
+- Second confirmation
+- Display the rule ID
+- Make it explicit that the user is voluntarily proceeding against safety advice
 
-## 11. 建议实现映射
+## 11. Suggested Implementation Mapping
 
-### 11.1 风险引擎到策略层
+### 11.1 Risk Engine to Policy Layer
 
-建议实现中把风险引擎输出映射为：
+The implementation should map risk engine output to:
 
 ```ts
 type RiskPolicyDecision = {
@@ -252,33 +258,33 @@ type RiskPolicyDecision = {
 };
 ```
 
-### 11.2 策略层到 UI 层
+### 11.2 Policy Layer to UI Layer
 
-建议 UI 不直接根据原始检查项做主决策，而是消费策略层结论：
+The UI should not make primary decisions based on raw check items, but consume policy layer conclusions:
 
 - `allowPreview`
 - `allowSigning`
 - `triggeredRules`
 - `primaryReason`
 
-这样可以避免组件各自发明一套风险逻辑。
+This prevents components from independently inventing their own risk logic.
 
-## 12. 测试与验收要求
+## 12. Testing & Acceptance Requirements
 
-MVP 至少验证以下路径：
+MVP must verify the following paths at minimum:
 
-- `Mint Authority` 命中后被阻断
-- `Freeze Authority` 只警告不阻断
-- `confidence < 0.5` 且 `needsClarification = true` 时回到澄清路径，而不是进入 `blocked`
-- 流动性数据缺失时返回 `unknown`
-- `unknown` 场景不会显示为安全通过
-- `high` 风险场景不会出现继续签名入口
-- `failed` 和 `blocked` 在 UI 上可区分
+- `Mint Authority` hit results in blocking
+- `Freeze Authority` only warns without blocking
+- `confidence < 0.5` and `needsClarification = true` returns to clarification path rather than `blocked`
+- Missing liquidity data returns `unknown`
+- `unknown` scenario is not displayed as safe/passed
+- `high` risk scenario does not show a proceed-to-signing entry
+- `failed` and `blocked` are visually distinguishable in the UI
 
-## 13. 与其它文档的关系
+## 13. Relationship to Other Documents
 
-- 与 [blocking-rules.md](./blocking-rules.md) 对齐规则清单
-- 与 [risk-engine.md](./risk-engine.md) 对齐风险输出结构
-- 与 [trust-boundaries.md](./trust-boundaries.md) 对齐默认安全原则
-- 与 [risk-cases.md](./risk-cases.md) 对齐样例预期
-- 与 [../api/ui-state-mapping.md](../api/ui-state-mapping.md) 对齐界面表现
+- Aligned with [blocking-rules.md](./blocking-rules.md) for rule list
+- Aligned with [risk-engine.md](./risk-engine.md) for risk output structure
+- Aligned with [trust-boundaries.md](./trust-boundaries.md) for default safety principles
+- Aligned with [risk-cases.md](./risk-cases.md) for case expectations
+- Aligned with [../api/ui-state-mapping.md](../api/ui-state-mapping.md) for UI behavior

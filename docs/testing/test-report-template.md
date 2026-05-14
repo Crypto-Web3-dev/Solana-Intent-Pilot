@@ -1,58 +1,58 @@
-# SIP 测试报告模板
+# SIP Test Report Template
 
-## 1. 基本信息
+## 1. Basic Information
 
-- 日期：
-- 测试人：
-- 分支或版本：
-- 测试环境：
-- 目标页面：
+- Date:
+- Tester:
+- Branch or version:
+- Test environment:
+- Target page:
 
-## 2. 测试范围
+## 2. Test Scope
 
-- [ ] 页面感知
-- [ ] Intent 解析
-- [ ] 风险扫描
-- [ ] 交易预览
-- [ ] 钱包签名
-- [ ] Demo 彩排
+- [ ] Page Awareness
+- [ ] Intent Parsing
+- [ ] Risk Scanning
+- [ ] Transaction Preview
+- [ ] Wallet Signing
+- [ ] Demo Rehearsal
 
-## 3. 测试结果总览
+## 3. Test Results Overview
 
-| 模块 | 结果 | 备注 |
+| Module | Result | Notes |
 | --- | --- | --- |
-| 页面感知 | `pass/fail` |  |
-| Intent 解析 | `pass/fail` |  |
-| 风险扫描 | `pass/fail` |  |
-| 交易预览 | `pass/fail` |  |
-| 钱包执行 | `pass/fail` |  |
-| Demo 路径 | `pass/fail` |  |
+| Page Awareness | `pass/fail` |  |
+| Intent Parsing | `pass/fail` |  |
+| Risk Scanning | `pass/fail` |  |
+| Transaction Preview | `pass/fail` |  |
+| Wallet Execution | `pass/fail` |  |
+| Demo Path | `pass/fail` |  |
 
-## 4. 关键用例记录
+## 4. Key Test Case Records
 
-| 用例 | 预期 | 实际 | 结果 |
+| Test Case | Expected | Actual | Result |
 | --- | --- | --- | --- |
-| 成功路径 | 能完成完整闭环 |  |  |
-| 风险阻断路径 | 高风险触发阻断 |  |  |
-| 低置信度路径 | 给出澄清或提示 |  |  |
-| 报价失败路径 | 展示错误与重试 |  |  |
-| 用户取消签名 | 能恢复到可操作状态 |  |  |
+| Success Path | Completes full end-to-end loop |  |  |
+| Risk Blocking Path | High risk triggers blocking |  |  |
+| Low Confidence Path | Provides clarification or prompt |  |  |
+| Quote Failure Path | Displays error and retry option |  |  |
+| User Cancels Signing | Restores to an operable state |  |  |
 
-## 5. 问题列表
+## 5. Issue List
 
-| 编号 | 严重度 | 描述 | 复现步骤 | 状态 |
+| No. | Severity | Description | Reproduction Steps | Status |
 | --- | --- | --- | --- | --- |
 | 1 | `P0/P1/P2` |  |  | `open/fixed` |
 
-## 6. 结论
+## 6. Conclusion
 
-- 是否可继续开发：
-- 是否可进入 Demo 彩排：
-- 是否达到当前验收标准：
+- Ready to continue development:
+- Ready for demo rehearsal:
+- Meets current acceptance criteria:
 
-## 7. 后续动作
+## 7. Follow-up Actions
 
-- [ ] 修复 P0 问题
-- [ ] 复测成功路径
-- [ ] 复测阻断路径
-- [ ] 更新相关文档
+- [ ] Fix P0 issues
+- [ ] Retest success path
+- [ ] Retest blocking path
+- [ ] Update related documentation

@@ -1,19 +1,19 @@
-# SIP Intent 样例载荷
+# SIP Intent Sample Payloads
 
-## 1. 目标
+## 1. Purpose
 
-本文件提供 SIP Intent 的参考样例，帮助开发、联调和测试阶段快速验证：
+This file provides reference samples for the SIP Intent, helping development, integration, and testing phases to quickly verify:
 
-- LLM 输出是否满足协议
-- UI 是否能正确消费字段
-- 风控和执行链是否能接住不同情形
+- Whether LLM output conforms to the protocol
+- Whether the UI can correctly consume the fields
+- Whether the risk control and execution pipeline can handle different scenarios
 
-## 2. 标准成功样例
+## 2. Standard Success Sample
 
-场景：
+Scenario:
 
-- 用户在页面上看到某个 token
-- 输入“买 1 SOL 的这个币”
+- The user sees a token on the page
+- Types "buy 1 SOL of this coin"
 
 ```json
 {
@@ -36,16 +36,16 @@
 }
 ```
 
-用途：
+Usage:
 
-- Happy path 联调
-- Action Card 基础渲染
+- Happy-path integration testing
+- Basic Action Card rendering
 
-## 3. 半仓样例
+## 3. Half-Position Sample
 
-场景：
+Scenario:
 
-- 用户输入“把一半 SOL 换成 USDC”
+- The user types "swap half of my SOL to USDC"
 
 ```json
 {
@@ -68,16 +68,16 @@
 }
 ```
 
-说明：
+Note:
 
-- 当 `amountMode` 不是 `exact` 时，`amount` 可先占位，由执行层用真实余额换算
+- When `amountMode` is not `exact`, `amount` can be a placeholder; the execution layer will calculate the real value using the actual balance
 
-## 4. 低置信度样例
+## 4. Low-Confidence Sample
 
-场景：
+Scenario:
 
-- 用户输入“买一点这个”
-- 页面线索不充分
+- The user types "buy a little of this"
+- Page context is insufficient
 
 ```json
 {
@@ -100,18 +100,18 @@
 }
 ```
 
-用途：
+Usage:
 
-- 验证低置信度提示
-- 验证系统不会继续进入报价和执行链
-- 验证“结构合法但仍需澄清”的路径
+- Verify low-confidence prompting
+- Verify the system does not proceed to the quote and execution pipeline
+- Verify the "structurally valid but still requires clarification" path
 
-## 5. 高风险候选样例
+## 5. High-Risk Candidate Sample
 
-场景：
+Scenario:
 
-- 用户想买页面上识别到的新币
-- 该 token 必须进入风险扫描
+- The user wants to buy a newly detected token from the page
+- The token must go through risk scanning
 
 ```json
 {
@@ -134,16 +134,16 @@
 }
 ```
 
-用途：
+Usage:
 
-- 验证风险扫描前置
-- 验证阻断型 Action Card
+- Verify risk scanning gate
+- Verify blocking-type Action Card
 
-## 6. 非法样例
+## 6. Invalid Sample
 
-场景：
+Scenario:
 
-- LLM 输出结构损坏
+- LLM output has a broken structure
 
 ```json
 {
@@ -157,13 +157,13 @@
 }
 ```
 
-预期：
+Expected:
 
-- Zod 校验失败
-- 进入 `intent.parse.failed`
+- Zod validation fails
+- Enters `intent.parse.failed`
 
-## 7. 联调建议
+## 7. Integration Tips
 
-- 每个样例都准备对应 UI 截图期望
-- 至少保留一份成功、低置信度、高风险、非法结构样例
-- 在没有接通真实 LLM 前，可先用这些载荷驱动前端和状态机
+- Prepare corresponding UI screenshot expectations for each sample
+- Keep at least one success, low-confidence, high-risk, and invalid-structure sample
+- Before connecting to a live LLM, these payloads can be used to drive the frontend and state machine

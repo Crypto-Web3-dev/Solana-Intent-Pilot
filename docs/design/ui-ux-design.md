@@ -1,165 +1,165 @@
-# SIP 界面设计
+# SIP UI Design
 
-## 1. 设计目标
+## 1. Design Goals
 
-SIP 的界面需要同时满足三件事：
+The SIP interface needs to satisfy three things simultaneously:
 
-- 在狭窄的 Side Panel 中快速建立信息层级
-- 把链上复杂度转化为可理解、可确认的动作卡片
-- 让 AI、风险扫描和执行状态形成连续的故事线
+- Quickly establish information hierarchy within the narrow Side Panel
+- Transform on-chain complexity into understandable, confirmable action cards
+- Make AI, risk scanning, and execution status form a continuous storyline
 
-## 2. 整体设计方向
+## 2. Overall Design Direction
 
-当前方案沿用 Solana 生态偏科技感的视觉语言，适合作为黑客松 Demo 起点：
+The current approach follows the Solana ecosystem's tech-forward visual language, which is suitable as a hackathon demo starting point:
 
-- 主题：深色模式 + 玻璃拟态质感
-- 品牌感：Solana Purple 与 Solana Green 形成高识别度对比
-- 调性：高密度信息面板 + 明确的状态反馈
-- 风格关键词：实时、精密、可信、面向交易
+- Theme: Dark mode + glassmorphism texture
+- Branding: Solana Purple and Solana Green form a high-recognition contrast
+- Tone: High-density information panel + clear status feedback
+- Style keywords: Real-time, precise, trustworthy, transaction-oriented
 
-## 3. 视觉系统
+## 3. Visual System
 
-### 3.1 颜色
+### 3.1 Colors
 
-| 角色 | 颜色值 | 用途 |
+| Role | Color Value | Usage |
 | --- | --- | --- |
-| 主背景 | `#0D0D0D` | 应用背景 |
-| 次级背景 | `#1A1A1A` | 卡片、输入框、消息气泡 |
-| 品牌主色 | `#9945FF` | CTA、重点状态、品牌元素 |
-| 安全/成功 | `#14F195` | 风险通过、成功态、收益提示 |
-| 危险/警告 | `#FF4B4B` | 风险阻断、错误、取消 |
+| Primary Background | `#0D0D0D` | App background |
+| Secondary Background | `#1A1A1A` | Cards, input boxes, message bubbles |
+| Brand Primary | `#9945FF` | CTA, key states, brand elements |
+| Safe/Success | `#14F195` | Risk passed, success state, yield hints |
+| Danger/Warning | `#FF4B4B` | Risk blocked, errors, cancellation |
 
-### 3.2 字体
+### 3.2 Fonts
 
-- 正文：`Inter`
-- 数值与地址：`JetBrains Mono`
+- Body text: `Inter`
+- Numbers and addresses: `JetBrains Mono`
 
-### 3.3 圆角与质感
+### 3.3 Border Radius and Texture
 
-- 卡片圆角：12px 到 16px
-- 主按钮：胶囊形态
-- 面板建议使用弱描边与轻度毛玻璃
+- Card border radius: 12px to 16px
+- Primary button: Pill shape
+- Panel should use subtle borders and light frosted glass
 
-## 4. Side Panel 布局
+## 4. Side Panel Layout
 
-### 4.1 顶部状态栏
+### 4.1 Top Status Bar
 
-内容：
+Content:
 
-- SIP Logo 与版本号
-- 钱包连接状态
-- 当前节点或网络状态
+- SIP Logo and version number
+- Wallet connection status
+- Current node or network status
 
-作用：
+Purpose:
 
-- 建立品牌识别
-- 告知用户当前是否具备执行交易的基础能力
+- Establish brand recognition
+- Inform the user whether they currently have the basic capability to execute transactions
 
-### 4.2 实时感知区
+### 4.2 Real-Time Detection Area
 
-内容：
+Content:
 
-- 当前页面识别到的 token、地址或热点线索
-- 一句话 AI 简评
-- 风险评分入口或风险仪表
+- Tokens, addresses, or trending cues detected on the current page
+- A one-sentence AI brief
+- Risk score entry or risk gauge
 
-作用：
+Purpose:
 
-- 让用户相信系统“看懂了当前页面”
-- 为后续意图解析提供上下文可视化
+- Make the user believe the system "understands the current page"
+- Provide context visualization for subsequent intent parsing
 
-### 4.3 对话区
+### 4.3 Conversation Area
 
-内容：
+Content:
 
-- 用户气泡
-- AI 流式回复
-- 处理中、扫描中等状态占位
+- User bubbles
+- AI streaming replies
+- Processing, scanning, and other status placeholders
 
-作用：
+Purpose:
 
-- 承载意图表达和解析反馈
-- 保持类似聊天产品的低门槛体验
+- Carry intent expression and parsing feedback
+- Maintain a low-barrier experience similar to chat products
 
-### 4.4 动作卡片区
+### 4.4 Action Card Area
 
-内容：
+Content:
 
-- 交易路由
-- 风险结论
-- 模拟结果
-- 主 CTA 与状态机
+- Transaction route
+- Risk conclusion
+- Simulation result
+- Primary CTA and state machine
 
-作用：
+Purpose:
 
-- 把“建议”转成“可执行动作”
-- 将签名流程变得可解释
+- Transform "suggestions" into "executable actions"
+- Make the signing flow explainable
 
-## 5. 核心组件规范
+## 5. Core Component Specifications
 
 ### 5.1 Risk Indicator
 
-展示建议：
+Display recommendations:
 
-- 使用红到绿的连续视觉提示
-- 展示 `Mint Auth`、`Freeze Auth`、`Liquidity` 等关键信号
-- 支持展开查看详细日志或解释
+- Use a continuous red-to-green visual cue
+- Display key signals such as `Mint Auth`, `Freeze Auth`, `Liquidity`
+- Support expanding to view detailed logs or explanations
 
 ### 5.2 Action Card
 
-展示建议：
+Display recommendations:
 
-- 显示输入资产、输出资产、估算数量
-- 标注协议来源，例如 `Swap via Jupiter`
-- 展示模拟结果与滑点
-- 基于风险等级切换按钮状态
+- Show input asset, output asset, and estimated amount
+- Annotate protocol source, e.g. `Swap via Jupiter`
+- Display simulation result and slippage
+- Toggle button state based on risk level
 
 ### 5.3 Detection Bar
 
-展示建议：
+Display recommendations:
 
-- 作为轻量提醒条或跑马灯
-- 点击即可把“分析这个代币”填入输入框
+- Act as a lightweight alert bar or marquee
+- Clicking fills "Analyze this token" into the input box
 
 ### 5.4 Chat Thread
 
-展示建议：
+Display recommendations:
 
-- AI 与用户消息区分明显
-- 处理流式文本与状态消息
-- 在等待交易或扫描时提供清晰占位反馈
+- Clear visual distinction between AI and user messages
+- Handle streaming text and status messages
+- Provide clear placeholder feedback while waiting for transactions or scans
 
-## 6. 关键交互流
+## 6. Key Interaction Flows
 
-### 6.1 正向交易流
+### 6.1 Normal Transaction Flow
 
-1. 页面识别到 token 或地址
-2. 用户发出自然语言命令
-3. AI 返回结构化意图并生成解释
-4. Wasm 返回风险结论
-5. UI 展示 Action Card 与模拟结果
-6. 用户确认签名
-7. UI 显示执行结果与 Explorer 跳转
+1. Page detects a token or address
+2. User issues a natural language command
+3. AI returns a structured intent and generates an explanation
+4. Wasm returns a risk conclusion
+5. UI displays Action Card and simulation result
+6. User confirms signature
+7. UI shows execution result and Explorer link
 
-### 6.2 风险阻断流
+### 6.2 Risk Block Flow
 
-1. Wasm 发现高风险信号
-2. Action Card 切换为危险状态
-3. AI 给出简要风险解释
-4. MVP 中用户只能取消或返回，不开放高风险 override
+1. Wasm discovers a high-risk signal
+2. Action Card switches to danger state
+3. AI provides a brief risk explanation
+4. In the MVP, the user can only cancel or go back; high-risk override is not available
 
-## 7. 前端实现建议
+## 7. Frontend Implementation Recommendations
 
-- 使用 React 组件化拆分 Header、ChatThread、ActionCard、RiskIndicator
-- 使用 Tailwind 管理颜色、间距和状态类
-- 使用 Framer Motion 做卡片推入、消息显现和状态切换
-- 把设计 token 抽到主题文件，避免颜色和尺寸散落在组件内
+- Use React component-based decomposition for Header, ChatThread, ActionCard, RiskIndicator
+- Use Tailwind to manage colors, spacing, and state classes
+- Use Framer Motion for card push-in, message appearance, and state transitions
+- Extract design tokens into a theme file to avoid colors and sizes scattered across components
 
-## 8. Demo 优先级建议
+## 8. Demo Priority Recommendations
 
-如果时间有限，优先保证以下视觉体验：
+If time is limited, prioritize the following visual experiences:
 
-- 页面检测后有明显感知反馈
-- Action Card 具有足够强的中心视觉
-- 风险通过与风险阻断两条状态明显可区分
-- 成功态能直接展示“交易完成”的正反馈
+- Obvious detection feedback after page scanning
+- Action Card with a strong central visual presence
+- Risk passed and risk blocked states are clearly distinguishable
+- Success state can directly display the positive feedback of "Transaction complete"

@@ -77,33 +77,48 @@ const panelStyles = {
 };
 
 function getFriendlyError(errorMsg?: string | null) {
-    if (!errorMsg) return "";
-    const lower = errorMsg.toLowerCase();
-    if (lower.includes("wallet public key") || lower.includes("connect your solana wallet")) return "Connect your Solana wallet before requesting a live Jupiter order.";
-    if (lower.includes("user rejected")) return "Signature cancelled by user.";
-    if (lower.includes("submit-failed")) return "Transaction failed to broadcast.";
-    if (lower.includes("simulation-failed")) return "Execution simulation failed.";
-    if (lower.includes("insufficient funds")) return "Insufficient balance for this trade.";
-    return errorMsg.replace("Simulation Logic Failed:", "Failed:");
+  if (!errorMsg) return "";
+  const lower = errorMsg.toLowerCase();
+  if (
+    lower.includes("supported page") ||
+    lower.includes("jupiter, pump.fun, x, dexscreener, solscan, or raydium")
+  ) {
+    return "Open a supported page like Jupiter, pump.fun, X, DexScreener, Solscan, or Raydium before submitting.";
+  }
+  if (lower.includes("wallet public key") || lower.includes("connect your solana wallet"))
+    return "Connect your Solana wallet before requesting a live Jupiter order.";
+  if (lower.includes("user rejected")) return "Signature cancelled by user.";
+  if (lower.includes("submit-failed")) return "Transaction failed to broadcast.";
+  if (lower.includes("simulation-failed")) return "Execution simulation failed.";
+  if (lower.includes("insufficient funds")) return "Insufficient balance for this trade.";
+  return errorMsg.replace("Simulation Logic Failed:", "Failed:");
 }
 
 export function SidePanelPage() {
   const [input, setInput] = useState("buy 1 SOL of this");
   const [selectedClarificationChoice, setSelectedClarificationChoice] = useState<string | null>(null);
   const state = useSidePanelState();
-  
-  const isBusy = state.phase !== "idle" && 
-                 state.phase !== "confirmed" && 
-                 state.phase !== "failed" &&
-                 state.phase !== "blocked";
-                 
+
+  const isBusy =
+    state.phase !== "idle" &&
+    state.phase !== "confirmed" &&
+    state.phase !== "failed" &&
+    state.phase !== "blocked";
+
   const isIdle = state.phase === "idle";
-  const effectiveInput = selectedClarificationChoice 
+  const effectiveInput = selectedClarificationChoice
     ? applyTokenConfirmation(input, selectedClarificationChoice)
     : input;
   const selectedChoiceSummary = selectedClarificationChoice
     ? formatClarificationChoiceSummary(selectedClarificationChoice)
     : null;
+
+  const statusLabel =
+    state.walletStatus === "ready"
+      ? "Wallet Connected"
+      : state.walletStatus === "unsupported-page"
+        ? "Supported Page Required"
+        : "Wallet Required";
 
   return (
     <main style={panelStyles.shell}>
@@ -113,15 +128,30 @@ export function SidePanelPage() {
             <div style={panelStyles.label}>Solana Intent Pilot</div>
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>SIP Assistant</h1>
           </div>
-          <div style={{ 
-            ...panelStyles.statusBadge, 
-            color: state.walletStatus === "ready" ? "#10b981" : "#94a3b8" 
-          }}>
-            <div style={{ 
-              width: 8, height: 8, borderRadius: "50%", 
-              background: state.walletStatus === "ready" ? "#10b981" : "#64748b" 
-            }} />
-            {state.walletStatus === "ready" ? "Wallet Connected" : "Wallet Required"}
+          <div
+            style={{
+              ...panelStyles.statusBadge,
+              color:
+                state.walletStatus === "ready"
+                  ? "#10b981"
+                  : state.walletStatus === "unsupported-page"
+                    ? "#f59e0b"
+                    : "#94a3b8"
+            }}>
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background:
+                  state.walletStatus === "ready"
+                    ? "#10b981"
+                    : state.walletStatus === "unsupported-page"
+                      ? "#f59e0b"
+                      : "#64748b"
+              }}
+            />
+            {statusLabel}
           </div>
         </div>
       </header>
@@ -135,57 +165,56 @@ export function SidePanelPage() {
             disabled={isBusy}
             placeholder="What would you like to do on Solana?"
             onChange={(event) => {
-                setInput(event.target.value);
-                setSelectedClarificationChoice(null);
+              setInput(event.target.value);
+              setSelectedClarificationChoice(null);
             }}
             style={{
-                ...panelStyles.input,
-                opacity: isBusy ? 0.6 : 1,
-                borderColor: isBusy ? "rgba(255,255,255,0.05)" : "rgba(56, 189, 248, 0.2)"
+              ...panelStyles.input,
+              opacity: isBusy ? 0.6 : 1,
+              borderColor: isBusy ? "rgba(255,255,255,0.05)" : "rgba(56, 189, 248, 0.2)"
             }}
           />
           {selectedChoiceSummary ? (
-            <div style={{
+            <div
+              style={{
                 marginTop: 8,
                 fontSize: 11,
                 color: "#94a3b8",
                 lineHeight: 1.4
-            }}>
-                Confirmed token: {selectedChoiceSummary}
+              }}>
+              Confirmed token: {selectedChoiceSummary}
             </div>
           ) : null}
           {isBusy ? (
-            <button 
-              onClick={() => state.cancelProcessing()} 
+            <button
+              onClick={() => state.cancelProcessing()}
               style={{
-                  ...panelStyles.button,
-                  background: "rgba(239, 68, 68, 0.1)",
-                  border: "1px solid rgba(239, 68, 68, 0.2)",
-                  color: "#f87171",
-                  boxShadow: "none",
-                  cursor: "pointer",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: "8px"
-              }}
-            >
+                ...panelStyles.button,
+                background: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid rgba(239, 68, 68, 0.2)",
+                color: "#f87171",
+                boxShadow: "none",
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "8px"
+              }}>
               <div className="spin-slow" style={{ fontSize: 16 }}>🛑</div>
               Cancel Processing
             </button>
           ) : (
-            <button 
+            <button
               disabled={!input.trim()}
-              onClick={() => void state.submit(effectiveInput)} 
+              onClick={() => void state.submit(effectiveInput)}
               style={{
-                  ...panelStyles.button,
-                  background: "linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%)",
-                  color: "#082f49",
-                  boxShadow: !input.trim() ? "none" : "0 4px 15px rgba(14, 165, 233, 0.3)",
-                  cursor: !input.trim() ? "not-allowed" : "pointer",
-                  opacity: !input.trim() ? 0.6 : 1
-              }}
-            >
+                ...panelStyles.button,
+                background: "linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%)",
+                color: "#082f49",
+                boxShadow: !input.trim() ? "none" : "0 4px 15px rgba(14, 165, 233, 0.3)",
+                cursor: !input.trim() ? "not-allowed" : "pointer",
+                opacity: !input.trim() ? 0.6 : 1
+              }}>
               Submit Intent
             </button>
           )}
@@ -196,61 +225,72 @@ export function SidePanelPage() {
           </div>
         )}
         {state.clarification?.candidateSymbols?.length ? (
-            <div style={{ 
-                marginTop: 14, 
-                padding: 12, 
-                borderRadius: 12, 
-                border: "1px solid rgba(56, 189, 248, 0.14)",
-                background: "rgba(56, 189, 248, 0.05)"
+          <div
+            style={{
+              marginTop: 14,
+              padding: 12,
+              borderRadius: 12,
+              border: "1px solid rgba(56, 189, 248, 0.14)",
+              background: "rgba(56, 189, 248, 0.05)"
             }}>
-                <div style={{ 
-                    fontSize: 11, 
-                    fontWeight: 700, 
-                    textTransform: "uppercase", 
-                    letterSpacing: "0.08em",
-                    color: "#7dd3fc",
-                    marginBottom: 8
-                }}>
-                    Confirm Output Token
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {state.clarification.candidateSymbols.map((symbol) => (
-                        <button 
-                            key={symbol}
-                            onClick={() => {
-                                const confirmedInput = applyTokenConfirmation(input, symbol);
-                                setSelectedClarificationChoice(symbol.includes("|") ? symbol : null);
-                                void state.submit(confirmedInput);
-                            }}
-                            style={{
-                                border: "1px solid rgba(125, 211, 252, 0.24)",
-                                background: "rgba(14, 165, 233, 0.1)",
-                                color: "#e0f2fe",
-                                borderRadius: 10,
-                                padding: "8px 10px",
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                opacity: 1
-                            }}
-                        >
-                            {symbol.includes("|") ? symbol : `Confirm ${symbol}`}
-                        </button>
-                    ))}
-                </div>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "#7dd3fc",
+                marginBottom: 8
+              }}>
+              Confirm Output Token
             </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {state.clarification.candidateSymbols.map((symbol) => (
+                <button
+                  key={symbol}
+                  onClick={() => {
+                    const confirmedInput = applyTokenConfirmation(input, symbol);
+                    setSelectedClarificationChoice(symbol.includes("|") ? symbol : null);
+                    void state.submit(confirmedInput);
+                  }}
+                  style={{
+                    border: "1px solid rgba(125, 211, 252, 0.24)",
+                    background: "rgba(14, 165, 233, 0.1)",
+                    color: "#e0f2fe",
+                    borderRadius: 10,
+                    padding: "8px 10px",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    opacity: 1
+                  }}>
+                  {symbol.includes("|") ? symbol : `Confirm ${symbol}`}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : null}
       </section>
 
       {state.errorMessage && (
-        <div style={{ 
-          marginTop: 16, padding: "12px 16px", borderRadius: 14, 
-          background: "rgba(239, 68, 68, 0.05)", border: "1px solid rgba(239, 68, 68, 0.15)",
-          color: "#f87171", fontSize: 13, display: 'flex', gap: 10, alignItems: 'flex-start'
-        }}>
+        <div
+          style={{
+            marginTop: 16,
+            padding: "12px 16px",
+            borderRadius: 14,
+            background: "rgba(239, 68, 68, 0.05)",
+            border: "1px solid rgba(239, 68, 68, 0.15)",
+            color: "#f87171",
+            fontSize: 13,
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-start"
+          }}>
           <span style={{ fontSize: 16 }}>🚫</span>
           <div style={{ lineHeight: 1.5 }}>
-            <div style={{ fontWeight: 700, marginBottom: 2, textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.05em' }}>Pilot Warning</div>
+            <div style={{ fontWeight: 700, marginBottom: 2, textTransform: "uppercase", fontSize: 11, letterSpacing: "0.05em" }}>
+              {state.reason === "unsupported-page" ? "Supported Page Required" : "Pilot Warning"}
+            </div>
             {getFriendlyError(state.errorMessage)}
           </div>
         </div>
@@ -260,7 +300,11 @@ export function SidePanelPage() {
         <section style={panelStyles.card}>
           <div style={panelStyles.label}>Pilot Intelligence</div>
           <IntentSummaryCard intent={state.intent} phase={state.phase} preview={state.preview} />
-          {state.risk && <div style={{ marginTop: 16 }}><RiskIndicator risk={state.risk} phase={state.phase} /></div>}
+          {state.risk && (
+            <div style={{ marginTop: 16 }}>
+              <RiskIndicator risk={state.risk} phase={state.phase} />
+            </div>
+          )}
         </section>
       )}
 
@@ -288,8 +332,8 @@ export function SidePanelPage() {
 
       {isIdle && !state.intent && (
         <div style={{ marginTop: 40, textAlign: "center", opacity: 0.3 }}>
-           <div className="float-anim" style={{ fontSize: 40, marginBottom: 12 }}>🛸</div>
-           <div style={{ fontSize: 13, fontWeight: 500, letterSpacing: '0.02em' }}>READY FOR MISSION COMMAND</div>
+          <div className="float-anim" style={{ fontSize: 40, marginBottom: 12 }}>🛸</div>
+          <div style={{ fontSize: 13, fontWeight: 500, letterSpacing: "0.02em" }}>READY FOR MISSION COMMAND</div>
         </div>
       )}
     </main>

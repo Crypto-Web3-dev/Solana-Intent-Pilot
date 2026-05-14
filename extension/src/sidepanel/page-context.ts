@@ -1,4 +1,5 @@
 import type { DetectedContextSnapshot, TokenHint } from "../shared/context";
+import { isSupportedPageUrl } from "../shared/supported-pages";
 
 type ChromeTabsApi = {
   query(queryInfo: {
@@ -16,7 +17,6 @@ type ChromeApi = {
   tabs?: ChromeTabsApi;
 };
 
-// 核心优化：缩短等待内容脚本的时间，防止按钮卡顿感
 const CONTENT_CONTEXT_TIMEOUT_MS = 600;
 
 function getChromeApi() {
@@ -25,15 +25,15 @@ function getChromeApi() {
   }).chrome;
 }
 
-function isNormalPage(url?: string) {
-  return Boolean(url && (url.startsWith("http://") || url.startsWith("https://")));  
+function isSupportedPage(url?: string) {
+  return isSupportedPageUrl(url);
 }
 
 export function selectCurrentPageContext(
   tabs: Array<{ id?: number; url?: string; title?: string }>,
   detectedAt: string
 ): DetectedContextSnapshot | null {
-  const tab = tabs.find((candidate) => isNormalPage(candidate.url));
+  const tab = tabs.find((candidate) => isSupportedPage(candidate.url));
 
   if (!tab?.id || !tab.url) {
     return null;
@@ -79,17 +79,16 @@ export async function getCurrentPageContext() {
     return null;
   }
 
-  // 核心优化：统一条用消息名，确信与内容脚本匹配
   const response = chromeApi.tabs.sendMessage
     ? await withTimeout(
         chromeApi.tabs.sendMessage<{
-          payload: {
+          payload?: {
             selectedText?: string;
-            rawHints: string[];
-            detectedTokens: TokenHint[];
+            rawHints?: string[];
+            detectedTokens?: TokenHint[];
           };
         }>(baseContext.tabId, {
-          type: "context.request_scan" // 与内容脚本保持一致
+          type: "context.request_scan"
         }),
         CONTENT_CONTEXT_TIMEOUT_MS
       ).catch(() => null)
@@ -103,7 +102,7 @@ export async function getCurrentPageContext() {
   };
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {        
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       reject(new Error("Content context request timed out"));

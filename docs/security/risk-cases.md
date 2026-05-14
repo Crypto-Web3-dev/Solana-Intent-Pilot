@@ -1,121 +1,150 @@
-# SIP 风险案例库
+# SIP Risk Case Library
 
-## 1. 目标
+## 1. Purpose
 
-本文件定义 MVP 阶段需要重点覆盖的风险案例，用于：
+This document defines the risk cases that must be covered in the MVP stage, used for:
 
-- 验证风控输出是否合理
-- 验证 UI 阻断和提示是否正确
-- 为 Demo 准备可控的风险路径
+- Validating that risk control outputs are reasonable
+- Validating that UI blocking and alerts are correct
+- Preparing controllable risk paths for demo
 
-## 2. 案例分类
+## 2. Case Categories
 
-### 2.1 Mint Authority 未放弃
+### 2.1 Mint Authority Not Renounced
 
-风险描述：
+Risk description:
 
-- 发行方仍可增发代币
+- Issuer can still mint additional tokens
 
-预期风控结果：
+Expected risk result:
 
 - `level = high`
 - `blocking = true`
-- 明确提示 `Mint Authority Enabled`
+- Explicitly flags `Mint Authority Enabled`
 
-预期 UI：
+Expected UI:
 
-- Action Card 进入红色阻断态
-- 主 CTA 禁用
+- Action Card enters red blocking state
+- Primary CTA disabled
 
-### 2.2 Freeze Authority 存在
+### 2.2 Freeze Authority Present
 
-风险描述：
+Risk description:
 
-- 项目方可冻结账户
+- Project owner can freeze accounts
 
-预期风控结果：
+Expected risk result:
 
-- 至少 `level = medium`
-- MVP 中默认不单独阻断
+- At least `level = medium`
+- MVP does not block on this alone
 
-预期 UI：
+Expected UI:
 
-- 黄色或红色提示
-- 必须展示具体原因
+- Yellow or red notice
+- Specific reason must be displayed
 
-### 2.3 流动性过低
+### 2.3 Low Liquidity
 
-风险描述：
+Risk description:
 
-- 即便合约权限正常，也可能缺乏退出流动性
+- Even if contract permissions are normal, exit liquidity may be lacking
 
-预期风控结果：
+Expected risk result:
 
-- `checks` 中包含 liquidity warning
-- 若与其它风险叠加，可升级为 `high`
+- `checks` includes a liquidity warning
+- If combined with other risks, may escalate to `high`
 
-预期 UI：
+Expected UI:
 
-- 明示“流动性不足”而不是仅显示总分
+- Displays "insufficient liquidity" rather than only showing the total score
 
-### 2.4 持仓集中度过高
+### 2.4 Excessive Holder Concentration
 
-风险描述：
+Risk description:
 
-- Top holders 过度集中，可能存在砸盘风险
+- Top holders are overly concentrated; dump risk may exist
 
-预期风控结果：
+Expected risk result:
 
-- 通常为 `warn`
-- 在 MVP 中可不默认阻断
+- Typically `warn`
+- MVP may not block by default
 
-预期 UI：
+Expected UI:
 
-- 展示为风险细项
-- 不应伪装成安全通过
+- Displayed as a risk detail item
+- Must not be disguised as a passed check
 
-### 2.5 数据缺失
+### 2.5 Data Missing
 
-风险描述：
+Risk description:
 
-- 无法获得流动性或 holder 数据
+- Unable to obtain liquidity or holder data
 
-预期风控结果：
+Expected risk result:
 
-- 不得显示为 `low`
-- 应标记为 `unknown`
+- Must not display as `low`
+- Should be marked as `unknown`
 
-预期 UI：
+Expected UI:
 
-- 展示“数据不足，无法完整判断”
+- Displays "insufficient data, unable to fully assess"
 
-## 3. 组合风险案例
+### 2.6 Current Page Not in Allowlist
 
-### 3.1 新币 + Mint Authority + 流动性低
+Risk description:
 
-预期：
+- Current browser tab does not belong to `SUPPORTED_PAGE_MATCHES`
 
-- 直接阻断
-- 作为高风险 Demo 样例优先保留
+Expected behavior:
 
-### 3.2 权限正常 + 流动性中等 + 持仓集中
+- Risk evaluation is not entered; directly `blocked` + `unsupported-page`
+- Wallet-detection stage returns `unsupported-page`; signature-submission stage throws a blocking error
+- UI displays "Supported Page Required" and provides a link to a supported page
 
-预期：
+## 3. Combined Risk Cases
 
-- 允许继续，但给出 `medium`
-- 用于测试黄色警示路径
+### 3.1 New Token + Mint Authority + Low Liquidity
 
-## 4. 测试建议
+Expected:
 
-- 每个案例准备一份模拟输入和期望输出
-- 前端应验证颜色、文案、按钮状态都一致
-- 风险案例尽量与真实或可复现的测试 token 对应
+- Directly blocked
+- Prioritized as a high-risk demo sample
 
-## 5. Demo 建议
+### 3.2 Normal Permissions + Medium Liquidity + Concentrated Holdings
 
-演示时最推荐准备两条：
+Expected:
 
-- 一条明显安全或低风险的成功路径
-- 一条 `Mint Authority` 触发的阻断路径
+- Allowed to proceed with `medium`
+- Used to test the yellow warning path
 
-这样最能体现 SIP 的“AI + 本地风控”差异化。
+## 4. Test Suggestions
+
+### 4.1 Risk Rule Coverage
+
+- Prepare simulated input and expected output for each case
+- Frontend should verify that color, copy, and button states are all consistent
+- Risk cases should correspond to real or reproducible test tokens when possible
+
+### 4.2 Page Allowlist & Entry Gating
+
+- Content script is not injected on unsupported pages
+- Page context returns null for unsupported URLs
+- Signable tab selection excludes unsupported pages
+- Wallet-bridge returns `unsupported-page` status for unsupported pages
+- Manifest `host_permissions` stays aligned with `SUPPORTED_PAGE_MATCHES`
+
+### 4.3 Input Bounds
+
+- Body text truncated to no more than `MAX_BODY_TEXT_CHARS` (600)
+- Selected text truncated to no more than `MAX_SELECTED_TEXT_CHARS` (120)
+- Raw hints count no more than `MAX_RAW_HINTS` (2), each no longer than `MAX_RAW_HINT_CHARS` (80)
+- Addresses no more than `MAX_TEXT_ADDRESSES` (2), tickers no more than `MAX_TEXT_TICKERS` (2)
+
+## 5. Demo Suggestions
+
+The two most recommended paths for demo are:
+
+- One clearly safe or low-risk success path
+- One `Mint Authority` triggered blocking path
+
+This best demonstrates SIP's "AI + local risk control" differentiation.

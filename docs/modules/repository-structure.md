@@ -1,122 +1,138 @@
-# SIP 仓库结构约定
+# SIP Repository Structure Conventions
 
-## 1. 目标
+## 1. Purpose
 
-本文件定义 SIP 推荐的仓库组织方式，目标是让扩展端、共享类型、本地 Wasm 和外部服务适配保持清晰边界。
+This document defines the repository organization for SIP, reflecting the actual project layout and boundaries between the extension, shared types, Wasm risk engine, and documentation.
 
-## 2. 推荐顶层结构
+## 2. Top-Level Structure
 
 ```text
-sip-project/
-├── extension/
-├── core-engine/
-├── services/
-├── docs/
-├── openspec/
-└── scripts/
+sip/
+├── extension/       # Chrome extension (Plasmo-based)
+├── risk-engine/     # Rust → Wasm risk engine
+├── docs/            # Official project documentation
+├── learn/           # Exploratory materials and Chinese-language source docs
+├── openspec/        # Change proposals and specifications
+└── pic/             # Images and assets
 ```
 
-## 3. 目录职责
+## 3. Directory Responsibilities
 
 ### 3.1 `extension/`
 
-Chrome 扩展主工程，包含：
+Chrome extension main project (Plasmo framework), containing:
 
-- `content/`: 页面感知逻辑
-- `background/`: 编排、消息中转、状态缓存
-- `sidepanel/`: React UI
-- `shared/`: 运行时共享类型和 helper
+- `src/content/`: page awareness logic (`detect-context.ts`)
+- `src/contents/`: Plasmo content scripts (`wallet-bridge.ts`) — injected into supported pages for wallet interaction
+- `src/background/`: orchestration, message routing, intent parsing, risk/quote/simulation adapters, Wasm integration
+- `src/sidepanel/`: React UI — pages, components, hooks
+- `src/shared/`: runtime shared types and helpers
 
-### 3.2 `core-engine/`
+### 3.2 `risk-engine/`
 
-Rust/Wasm 核心库，包含：
+Rust/Wasm risk engine, containing:
 
-- 风险扫描逻辑
-- 原始账户数据解析
-- 纯函数型安全报告输出
+- `src/lib.rs`: risk scanning logic with 5 rules (Blacklist, Authority, Economic, Trust, Lifecycle)
+- `pkg/`: compiled Wasm output (`sip_risk_engine_bg.wasm` + JS/TS bindings)
+- Compiled artifacts are copied to `extension/src/background/wasm/` for extension consumption
 
-### 3.3 `services/`
+### 3.3 `docs/`
 
-外部服务适配层，包含：
+Official project documentation, serving as the stable knowledge source. Consolidated from `learn/` materials.
 
-- LLM prompt 与解析封装
-- Jupiter、RPC、模拟、钱包适配
-- 未来可扩展的 metadata provider
+### 3.4 `learn/`
 
-### 3.4 `docs/`
-
-正式项目文档目录，作为稳定知识源。
+Exploratory and Chinese-language source documents. Not the canonical source — `docs/` takes priority.
 
 ### 3.5 `openspec/`
 
-变更提案、规格与任务追踪目录。
+Change proposals, design specifications, and task tracking.
 
-### 3.6 `scripts/`
-
-开发脚本，例如：
-
-- Wasm 构建脚本
-- 类型生成脚本
-- 本地打包或校验脚本
-
-## 4. `extension/src` 推荐结构
+## 4. `extension/src` Structure
 
 ```text
 extension/src/
 ├── content/
-│   ├── detect-context.ts
-│   └── selectors.ts
+│   └── detect-context.ts       # Page context detection and token extraction
+├── contents/
+│   └── wallet-bridge.ts        # Plasmo content script for wallet signing on supported pages
 ├── background/
-│   ├── message-router.ts
-│   ├── workflow-engine.ts
-│   └── stores/
+│   ├── index.ts                # Plasmo background entry
+│   ├── message-router.ts       # Core message hub, dispatches to workflow
+│   ├── workflow-engine.ts      # Workflow state machine orchestration
+│   ├── openai-intent-parser.ts # LLM intent parsing via OpenAI
+│   ├── intent-parser.ts        # Intent parsing abstraction
+│   ├── risk-adapter.ts         # Risk adapter (Wasm + policy fallback)
+│   ├── wasm-risk-engine.ts     # Wasm risk engine loader
+│   ├── quote-adapter.ts        # Jupiter quote integration
+│   ├── preview-adapter.ts      # Execution preview builder
+│   ├── simulation-adapter.ts   # Transaction simulation
+│   ├── jito-adapter.ts         # Jito bundle submission
+│   ├── token-context-enricher.ts # On-chain token data enrichment
+│   ├── runtime-services.ts     # Runtime service factory
+│   ├── mock-services.ts        # Mock services for development
+│   └── wasm/                   # Compiled Wasm binary + JS/TS bindings
 ├── sidepanel/
+│   ├── index.tsx               # Side panel entry point
+│   ├── page-context.ts         # Page context selection
+│   ├── wallet-bridge.ts        # Wallet status detection and signing
+│   ├── wallet-provider.ts      # React wallet context provider
+│   ├── wallet-state.ts         # Wallet status types
+│   ├── token-confirmation.ts   # Clarification choice parsing
+│   ├── styles.css
 │   ├── pages/
+│   │   └── SidePanelPage.tsx   # Main side panel page
 │   ├── components/
-│   ├── hooks/
-│   └── state/
+│   │   ├── ActionCard.tsx
+│   │   ├── DetectionBar.tsx
+│   │   ├── ExecutionProgress.tsx
+│   │   ├── IntentSummaryCard.tsx
+│   │   ├── RiskIndicator.tsx
+│   │   └── StrategyViz.tsx
+│   └── hooks/
+│       └── useSidePanelState.ts
 ├── shared/
-│   ├── intent.ts
-│   ├── messages.ts
-│   ├── workflow.ts
-│   └── formatting.ts
-└── lib/
-    ├── rpc/
-    ├── wallet/
-    └── telemetry/
+│   ├── intent.ts               # SIPIntent, SIPAction, ClarificationPayload types
+│   ├── messages.ts             # All message type definitions (17+ types)
+│   ├── risk.ts                 # SecurityReport, RiskLevel, SecurityCheck types
+│   ├── context.ts              # DetectedContextSnapshot, TokenHint types
+│   ├── execution.ts            # ExecutionPreview type
+│   ├── workflow.ts             # WorkflowPhase, WorkflowReason types
+│   ├── supported-pages.ts      # SUPPORTED_PAGE_MATCHES allowlist
+│   └── demo-mode.ts            # Demo mode utilities
 ```
 
-## 5. 依赖方向约束
+## 5. Dependency Direction Constraints
 
-- `content/` 只能依赖 `shared/` 和少量平台 helper
-- `sidepanel/` 可以依赖 `shared/` 和本地 UI primitives，但不要直接依赖 `content/`
-- `background/` 负责协调 `services/` 和 `core-engine` 的桥接
-- `shared/` 不依赖上层运行时实现
-- `core-engine/` 不依赖 React、Chrome API 或 UI 代码
+- `content/` may only depend on `shared/`
+- `contents/` (wallet-bridge) depends on `shared/` for `SUPPORTED_PAGE_MATCHES`
+- `sidepanel/` may depend on `shared/`, but must not directly depend on `content/` or `background/`
+- `background/` coordinates all adapters and Wasm integration
+- `shared/` must not depend on upstream runtime implementations
+- `risk-engine/` (Rust) does not depend on React, Chrome APIs, or UI code
 
-## 6. 命名建议
+## 6. Naming Conventions
 
-- 类型文件优先用名词：`intent.ts`、`messages.ts`
-- 编排文件用动词或角色：`workflow-engine.ts`、`message-router.ts`
-- 组件文件与导出组件同名：`ActionCard.tsx`
-- Hook 统一以 `use` 开头
+- Type files should prefer nouns: `intent.ts`, `messages.ts`, `risk.ts`
+- Orchestration files should use verbs or roles: `workflow-engine.ts`, `message-router.ts`
+- Component files should match the exported component name: `ActionCard.tsx`
+- Hooks should consistently start with `use`
 
-## 7. 何时拆包
+## 7. Extension Build & Wasm Integration
 
-MVP 阶段不建议过早拆成 monorepo 多包，先保证目录边界清晰即可。
+- Extension is built with Plasmo (`plasmo` dev/build commands)
+- Wasm is compiled from `risk-engine/` using `wasm-pack build --target web`
+- Compiled Wasm output in `risk-engine/pkg/` is copied to `extension/src/background/wasm/`
+- The extension loads Wasm lazily via `loadDefaultWasmRiskEngine()` with streaming instantiation
 
-当出现以下情况时可考虑拆分：
+## 8. Test Structure
 
-- `shared/` 类型被多个运行时或工具复用
-- `core-engine/` 需要独立发布或单独测试
-- `services/` 中的适配逻辑明显膨胀
+```
+extension/tests/
+├── background/          # Unit tests for background modules
+├── content/             # Unit tests for content detection
+├── shared/              # Contract and shared type tests
+└── sidepanel/           # Component and hook tests
+```
 
-## 8. 最小落地建议
-
-如果要尽快开工，最小结构至少保证：
-
-- `extension/src/shared/messages.ts`
-- `extension/src/shared/intent.ts`
-- `extension/src/background/workflow-engine.ts`
-- `extension/src/sidepanel/pages/SidePanelPage.tsx`
-- `core-engine/src/lib.rs`
+Test framework: Vitest. Run via `npm test` in the `extension/` directory.

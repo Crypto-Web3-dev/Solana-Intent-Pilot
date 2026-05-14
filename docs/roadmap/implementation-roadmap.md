@@ -1,91 +1,91 @@
-# SIP 实施路线图
+# SIP Implementation Roadmap
 
-## 1. 目标
+## 1. Objective
 
-在最短周期内交付一个可演示的 MVP，完成以下核心闭环：
+Deliver a demonstrable MVP in the shortest possible cycle, completing the following core closed loop:
 
-- 浏览网页时识别上下文
-- 在 Side Panel 中发出自然语言意图
-- 获得 AI 解析结果与风险结论
-- 预览交易并唤起钱包签名
+- Recognize context while browsing web pages
+- Issue natural language intents in the Side Panel
+- Obtain AI parsed results and risk conclusions
+- Preview transactions and invoke wallet signing
 
-说明：
+Note:
 
-- 这是一份历史路线图，保留用于说明产品是如何分阶段落地的
-- 当前实现已经完成了基础骨架、真实执行闭环、执行预览真实化、Wasm 风控和 demo polish 等后续切片
-- 后续工作请优先查看 [后续阶段计划](./next-phase-plan.md)
+- This is a historical roadmap, retained to illustrate how the product was implemented in phases
+- The current implementation has already completed subsequent slices including base skeleton, real execution closed loop, execution preview realism, Wasm risk control, and demo polish
+- For future work, please refer to [Next Phase Plan](./next-phase-plan.md)
 
-## 2. 建议阶段
+## 2. Suggested Phases
 
-### 阶段一：项目骨架与基础设施
+### Phase 1: Project Skeleton and Infrastructure
 
-- 初始化 Plasmo 扩展工程
-- 建立 Side Panel、Background、Content Script 基础通信
-- 接入钱包连接能力
-- 读取当前页面 URL、标题和选中文本
+- Initialize Plasmo extension project
+- Establish basic communication between Side Panel, Background, and Content Script
+- Integrate wallet connection capability
+- Read current page URL, title, and selected text
 
-交付结果：
+Deliverables:
 
-- 插件框架可运行
-- 基础状态可以在 Side Panel 中显示
+- Extension framework is runnable
+- Basic state can be displayed in the Side Panel
 
-### 阶段二：意图解析闭环
+### Phase 2: Intent Parsing Closed Loop
 
-- 编写系统 Prompt
-- 接入 LLM 服务
-- 用 Schema 校验 JSON Intent
-- 将解析结果渲染到 UI 中
+- Write system Prompt
+- Integrate LLM service
+- Validate JSON Intent with Schema
+- Render parsed results to UI
 
-交付结果：
+Deliverables:
 
-- 从自然语言到结构化 Intent 的最小可用闭环
+- Minimum viable closed loop from natural language to structured Intent
 
-### 阶段三：执行预览
+### Phase 3: Execution Preview
 
-- 接入 Jupiter 报价
-- 构建交易预览卡片
-- 调用 `simulateTransaction`
-- 展示预估滑点和资产变化
+- Integrate Jupiter quotes
+- Build transaction preview card
+- Call `simulateTransaction`
+- Display estimated slippage and asset changes
 
-交付结果：
+Deliverables:
 
-- 用户可在签名前看到交易结果预览
+- Users can preview transaction results before signing
 
-### 阶段四：本地 Wasm 风控
+### Phase 4: Local Wasm Risk Control
 
-- 编写 Rust 风险扫描逻辑
-- 使用 `wasm-pack` 构建产物
-- 在扩展中加载 Wasm 模块
-- 将风险报告接入 Action Card
+- Write Rust risk scanning logic
+- Build artifacts using `wasm-pack`
+- Load Wasm module in the extension
+- Integrate risk report into Action Card
 
-交付结果：
+Deliverables:
 
-- 形成“先扫描，再确认”的可信执行体验
+- Form a "scan first, then confirm" trusted execution experience
 
-### 阶段五：演示强化
+### Phase 5: Demo Enhancement
 
-- 增强动画与加载反馈
-- 增加成功态、失败态和阻断态
-- 优化 Demo 路线与话术
+- Enhance animations and loading feedback
+- Add success, failure, and blocked states
+- Optimize demo path and talking points
 
-交付结果：
+Deliverables:
 
-- 适合黑客松路演的完整演示版本
+- Complete demo version suitable for hackathon presentations
 
-## 3. 风险与依赖
+## 3. Risks and Dependencies
 
-- LLM 输出可能不稳定，必须有 Schema 校验和兜底
-- Chrome MV3 中 Wasm 加载存在 CSP 约束
-- 公共 RPC 容易限流，需要准备备用节点
-- 钱包签名与模拟链路需要真实环境验证
+- LLM output may be unstable; Schema validation and fallbacks are required
+- Wasm loading in Chrome MV3 has CSP constraints
+- Public RPCs are prone to rate limiting; backup nodes are needed
+- Wallet signing and simulation flow require real-environment verification
 
-## 4. 优先级建议
+## 4. Priority Recommendations
 
-如果时间极度紧张，建议优先保住以下能力：
+If time is extremely tight, prioritize preserving the following capabilities:
 
-1. Side Panel + 页面上下文检测
-2. Intent 解析 + JSON 校验
-3. Jupiter 报价 + 交易预览
-4. 最小版风险扫描
+1. Side Panel + page context detection
+2. Intent parsing + JSON validation
+3. Jupiter quotes + transaction preview
+4. Minimal risk scanning
 
-视觉增强、桥接、多协议扩展可以放在后续迭代。
+Visual enhancements, bridging, and multi-protocol expansion can be deferred to subsequent iterations.

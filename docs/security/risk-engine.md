@@ -1,125 +1,153 @@
-# SIP 风险引擎设计
+# SIP Risk Engine Design
 
-## 1. 目标
+## 1. Purpose
 
-SIP 风险引擎用于在交易执行前提供浏览器本地的基础安全校验，减少把安全判断完全交给云端模型的风险。
+The SIP risk engine provides browser-local rule-based security checks before transaction execution, reducing the risk of delegating safety judgments entirely to cloud models.
 
-MVP 阶段重点不是做完整审计系统，而是快速识别高风险代币和明显异常状态。
+The MVP focus is not a complete audit system, but rapid identification of high-risk tokens and obvious anomaly states using deterministic rules in Wasm, with a policy-based fallback.
 
-## 2. 设计原则
+## 2. Design Principles
 
-- 风险引擎运行在本地 Wasm 环境
-- 输出结构必须简单、稳定、可被 UI 直接消费
-- 高风险应默认阻断，避免“已发现问题仍无提示”
-- 评分逻辑优先明确可解释，而不是追求复杂模型
+- The risk engine runs primarily in a local Wasm environment with a policy-based fallback
+- Output structure must be simple, stable, and directly consumable by UI
+- High risk should block by default, avoiding "problems detected but no warning shown"
+- Scoring logic prioritizes clear explainability over complex models
+- Page allowlist validation precedes risk evaluation: if the current page is not in `SUPPORTED_PAGE_MATCHES`, the risk engine is not invoked and the system directly enters `blocked` + `unsupported-page` state
+- Wasm is loaded lazily; if unavailable, `policy-fallback` provides baseline checks
 
-## 3. 输入与输出
+## 3. Input & Output
 
-### 3.1 输入
+### 3.1 Input
 
-- Mint 账户原始字节数据
-- 目标 token mint 地址
-- 可选的流动性、持仓和模拟辅助数据
+- `SIPIntent` (JSON-serialized) passed to `scan_risk()`
+- The intent includes `riskContext` with on-chain data: mintAuthority, freezeAuthority, liquidityUsd, isJupVerified, tokenAgeHours
+- On-chain data is enriched before Wasm invocation by `token-context-enricher.ts` using Jupiter API + Helius RPC
 
-### 3.2 输出
+### 3.2 Output
 
 ```ts
-export interface SecurityReport {
+type RiskLevel = "low" | "medium" | "high" | "unknown";
+type RiskEngineSource = "wasm" | "policy-fallback";
+
+interface SecurityCheck {
+  key: string;
+  label: string;
+  status: "pass" | "warn" | "fail";
+  detail: string;
+}
+
+interface SecurityReport {
+  source: RiskEngineSource;
   score: number;
-  level: "low" | "medium" | "high" | "unknown";
+  level: RiskLevel;
   blocking: boolean;
-  checks: Array<{
-    key: string;
-    label: string;
-    status: "pass" | "warn" | "fail";
-    detail: string;
-  }>;
+  checks: SecurityCheck[];
   summary: string;
 }
 ```
 
-## 4. MVP 检查项
+## 4. Wasm Risk Rules
 
-### 4.1 Mint Authority
+The Rust Wasm module (`risk-engine/src/lib.rs`) exports `scan_risk(intent_json: &str) -> String` and implements 5 rules:
 
-- 存在时视为高风险候选
-- 因为项目方可能继续增发代币
+### 4.1 BlacklistRule
 
-### 4.2 Freeze Authority
+- Checks if outputMint contains "blocked"
+- Status: `fail`
 
-- 存在时至少给出警告
-- MVP 中默认给出警告，不单独作为阻断条件
+### 4.2 AuthorityRule
 
-### 4.3 Liquidity 基础检查
+Two sub-checks:
 
-- 如果能拿到流动性池信息，则检查是否过低
-- 在缺失数据时不要伪造“安全”，应标为 `unknown`
+- **rug-potential** (`fail`): active mint authority + low liquidity + unverified token
+- **honeypot-warning** (`warn`): freeze authority + unverified token
 
-### 4.4 持仓集中度
+### 4.3 EconomicRule
 
-- 如果可获取 top holders 数据，则检查是否过度集中
-- 在 MVP 中可作为加分项，不一定阻断
+- **high-slippage** (`warn`): slippageBps > 500
 
-## 5. 评分建议
+### 4.4 TrustRule
 
-可以采用简单扣分模型：
+- **unverified-low-liquidity** (`warn`): unverified token with low liquidity
+- **unverified-liquidity-unknown** (`warn`): unverified token with unknown liquidity
 
-- 初始分：`100`
-- 存在 Mint Authority：`-60`
-- 存在 Freeze Authority：`-30`
-- 流动性过低：`-20`
-- 持仓过于集中：`-20`
+### 4.5 LifecycleRule
 
-建议级别：
+- **fresh-token** (`warn`): token age < 24 hours + unverified
+
+## 5. Scoring
+
+Simple rule-based model:
+
+- Starting score: `100`
+- `fail` result: score set to `0`
+- `warn` result: score reduced by `35`
+- Multiple warnings stack: each subtracts `35`
+- Missing risk context: `level: "unknown"`, `score: 0`
+
+Level thresholds:
 
 - `80-100`: `low`
-- `50-79`: `medium`
-- `<50`: `high`
-- 关键数据缺失且无法完成最低检查覆盖：`unknown`
+- `45-79`: `medium`
+- `<45` or any `fail`: `high`
+- Critical data missing: `unknown`
 
-建议阻断策略：
+**Current implementation note**: The Wasm `blocking` field is hardcoded to `false`. Actual blocking decisions are made by the risk adapter layer (`risk-adapter.ts`) which applies policy rules on top of the Wasm output.
 
-- 命中明确阻断规则时优先阻断，例如 `Mint Authority`
-- 未命中明确阻断规则时，可在 `score < 50` 时阻断
-- `unknown` 默认不直接映射为 `high`，但必须通过 UI 明示“数据不足”
+## 6. Policy Fallback
 
-## 6. Rust 模块边界
+When Wasm is unavailable (e.g. test environment, load failure), `createPolicyRiskAdapter()` provides baseline checks:
 
-建议 Wasm 暴露纯函数接口，不耦合 UI 或网络请求：
+- Checks mint authority and freeze authority presence
+- Checks token verification status
+- Marks incomplete data as `unknown`
+- Source: `"policy-fallback"`
+
+## 7. Risk Adapter Architecture
+
+`risk-adapter.ts` orchestrates the full risk evaluation:
+
+1. Enriches intent with live on-chain data via `fetchTokenSecurity()` (Jupiter API + Helius RPC)
+2. Tries Wasm engine first via `loadDefaultWasmRiskEngine()`
+3. Falls back to policy-based `buildPolicyReport()` if Wasm unavailable
+4. If Wasm returns baseline pass without live data, `markInsufficientRiskData()` upgrades to `level: "unknown"`
+
+## 8. Rust Module Boundary
 
 ```rust
 #[wasm_bindgen]
-pub fn analyze_mint_data(data: &[u8]) -> Result<JsValue, JsValue>;
+pub fn scan_risk(intent_json: &str) -> String;
 ```
 
-Rust 负责：
+Rust is responsible for:
 
-- 解析原始数据
-- 计算风险分值
-- 返回结构化报告
+- Receiving intent JSON and parsing risk context
+- Running rule checks against on-chain metadata
+- Computing risk scores and returning structured reports
 
-JS/TS 负责：
+JS/TS is responsible for:
 
-- 获取 RPC 数据
-- 调用 Wasm
-- 将结果映射到 UI 标签和状态机
+- Fetching on-chain data and enriching the intent
+- Loading and instantiating the Wasm module
+- Interpreting `SecurityReport` for UI and workflow decisions
 
-## 7. UI 映射建议
+## 9. UI Mapping
 
-- `low`: 绿色盾牌，可正常继续
-- `medium`: 黄色提示，可继续但需明确告知风险
-- `high`: 红色警告，默认阻断
-- `unknown`: 中性或黄色提示，不得伪装成已通过检查
+- `low`: green shield, proceed normally
+- `medium`: yellow notice, proceed but risk must be clearly communicated
+- `high`: red warning, block by default
+- `unknown`: neutral or yellow notice, must not be disguised as a passed check
 
-Action Card 应根据 `blocking` 决定：
+Action Card should decide based on `blocking`:
 
-- 禁用主 CTA
-- MVP 默认只展示取消或返回，不开放高风险 override
-- 高亮说明具体失败检查项
+- Disable primary CTA
+- MVP only shows cancel or back by default; high-risk override not enabled
+- Highlight the specific failed check item
 
-## 8. 后续扩展方向
+## 10. Future Extensions
 
-- 增加 simulateTransaction 的 balance diff 风险解释
-- 引入协议级黑名单或信誉名单
-- 接入多源流动性和 holder 数据
-- 对不同意图类型使用不同风险策略
+- Make Wasm `blocking` field dynamic based on rule outcomes rather than hardcoded
+- Add `simulateTransaction` balance diff risk explanation
+- Introduce protocol-level blacklists or reputation lists
+- Connect multi-source liquidity and holder data
+- Use different risk strategies per intent type

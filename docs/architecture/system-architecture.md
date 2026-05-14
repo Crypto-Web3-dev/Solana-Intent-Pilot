@@ -1,116 +1,115 @@
-# SIP 系统架构
+# SIP System Architecture
 
-## 1. 总体架构
+## 1. Overall Architecture
 
-SIP 采用三层混合架构，在智能性、可解释性与执行性能之间取得平衡：
+SIP adopts a three-layer hybrid architecture, balancing intelligence, interpretability, and execution performance:
 
-- L1 推理层：云端 LLM 负责把自然语言转成结构化 Intent
-- L2 验证层：本地 Rust/Wasm 负责风控、解析与模拟前校验
-- L3 执行层：Solana 协议适配器负责报价、构建交易、签名与状态同步
+- L1 Reasoning Layer: Cloud LLM responsible for converting natural language into structured Intent
+- L2 Validation Layer: Local Rust/Wasm responsible for risk control, parsing, and pre-simulation validation
+- L3 Execution Layer: Solana protocol adapters responsible for quoting, building transactions, signing, and state synchronization
 
-这套结构的目标是让“理解”和“执行”解耦，让云端模型负责语义，让本地逻辑负责可信判断。
+The goal of this structure is to decouple "understanding" from "execution," letting cloud models handle semantics while local logic handles trusted judgment.
 
-## 2. 分层说明
+## 2. Layer Descriptions
 
-### 2.1 感知层
+### 2.1 Perception Layer
 
-由 Content Script 和 Side Panel UI 共同组成，负责收集和承载上下文：
+Composed of Content Script and Side Panel UI, responsible for collecting and carrying context:
 
-- 抓取当前页面 URL、标题、选中文本、检测到的代币符号和地址
-- 接收用户自然语言输入
-- 将上下文展示为可交互的实时提示与分析卡片
+- Scrape current page URL, title, selected text, detected token symbols and addresses
+- Receive user natural language input
+- Display context as interactive real-time hints and analysis cards
 
-### 2.2 推理层
+### 2.2 Reasoning Layer
 
-由云端 LLM 驱动：
+Driven by cloud LLM:
 
-- 接收用户输入和页面上下文
-- 输出标准化 JSON Intent
-- 返回置信度、简要推理说明与是否需要风险校验
+- Receive user input and page context
+- Output standardized JSON Intent
+- Return confidence, brief reasoning explanation, and whether risk validation is needed
 
-这一层强调结构化输出，而不是开放式对话。
+This layer emphasizes structured output rather than open-ended dialogue.
 
-### 2.3 验证层
+### 2.3 Validation Layer
 
-由 Rust/Wasm 本地引擎驱动：
+Driven by local Rust/Wasm engine with policy-based fallback:
 
-- 解析 SPL Token Mint 数据
-- 检查 Mint Authority、Freeze Authority 等风险指标
-- 执行轻量级链上数据解析与评分
-- 为 UI 提供明确的风险状态和说明文案
+- Receive `SIPIntent` and evaluate against 5 rule-based checks (Blacklist, Authority, Economic, Trust, Lifecycle)
+- Check risk indicators such as Mint Authority, Freeze Authority, token verification, liquidity, and token age
+- Compute risk scores and produce structured `SecurityReport` with `source: RiskEngineSource`
+- On-chain data enrichment via Jupiter API + Helius RPC before Wasm evaluation
+- Fall back to `policy-fallback` when Wasm is unavailable
 
-### 2.4 执行层
+### 2.4 Execution Layer
 
-负责对接 Solana 生态能力：
+Responsible for interfacing with Solana ecosystem capabilities:
 
-- 使用 Jupiter 获取报价与路由
-- 使用钱包适配器或原生 provider 触发签名
-- 调用 RPC 进行 `simulateTransaction`
-- 监听执行结果并同步 UI 状态
+- Use Jupiter V2 API for quotes and swap transactions with x-api-key authentication
+- Use Jito for priority bundle submission with tips
+- Detect wallet presence via content script injection into supported pages
+- Trigger signing via `window.solana.signAndSendTransaction` on supported pages
+- Call RPC for `simulateTransaction`
+- Monitor execution results and synchronize UI state
 
-## 3. 关键运行时链路
+## 3. Key Runtime Chains
 
-### 3.1 页面感知链路
+### 3.1 Page Perception Chain
 
-1. Content Script 监听 DOM 更新或用户选择行为
-2. 检测页面内的代币符号、Base58 地址和上下文文本
-3. 将上下文消息发送给 Background/Side Panel
-4. Side Panel 更新当前关注对象与建议动作
+1. Content Script listens for DOM updates or user selection behavior
+2. Detects token symbols, Base58 addresses, and contextual text within the page
+3. Sends context messages to Background/Side Panel
+4. Side Panel updates current focus object and suggested actions
 
-### 3.2 意图执行链路
+### 3.2 Intent Execution Chain
 
-1. 用户在 Side Panel 输入自然语言
-2. LLM 根据页面上下文返回 JSON Intent
-3. 本地 Wasm 对目标 token 或交易对象进行风险校验
-4. 执行层请求报价、生成预览、模拟交易
-5. 用户确认后唤起钱包签名
-6. Side Panel 展示成功、失败或阻断结果
+1. User enters natural language in Side Panel
+2. LLM returns JSON Intent based on page context
+3. Local Wasm performs risk validation on target token or transaction object
+4. Execution layer requests quote, generates preview, simulates transaction
+5. User confirms and triggers wallet signature
+6. Side Panel displays success, failure, or blocked result
 
-## 4. 标准 Intent 协议
+## 4. Standard Intent Protocol
 
-系统内部需要统一的意图数据结构，确保云端和本地执行层对齐：
+The system uses a unified `SIPIntent` data structure to ensure alignment between cloud and local execution layers. See [intent-schema.md](../api/intent-schema.md) for full type definitions.
 
-```json
-{
-  "intent": "SWAP",
-  "confidence": 0.98,
-  "payload": {
-    "inputToken": "So11111111111111111111111111111111111111112",
-    "outputToken": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "amount": "1000000000",
-    "slippageBps": 50,
-    "platform": "Jupiter"
-  },
-  "metadata": {
-    "requiresRiskScan": true
-  }
+```ts
+interface SIPIntent {
+  intentId: string;
+  mode: "SINGLE" | "ATOMIC_BUNDLE" | "PARALLEL";
+  actions: SIPAction[];
+  metadata: SIPIntentMetadata;
 }
 ```
 
-建议在实现中结合 Zod 或同类方案做运行时校验，避免格式漂移伤害下游执行链。
+Runtime validation is applied to prevent format drift that would harm downstream execution chains.
 
-## 5. 通信关系
+## 5. Communication Relationships
 
-- `content -> background`: 页面上下文、地址检测结果、页面事件
-- `background -> sidepanel`: 状态广播、检测结果、执行进度
-- `sidepanel -> llm-service`: 用户输入与结构化推理请求
-- `sidepanel/background -> wasm-engine`: 风险扫描与数据解析请求
-- `execution-adapter -> solana rpc/jupiter`: 报价、模拟、交易下发
+- `content/detect-context` → `background/message-router`: Page context, address detection results, page events
+- `background/message-router` → `sidepanel`: `workflow.state.changed` broadcasts, detection results, execution progress
+- `background` → `openai-intent-parser`: User input and structured reasoning via OpenAI API
+- `background/risk-adapter` → `wasm-risk-engine`: Risk scan requests, receives `SecurityReport`
+- `background/quote-adapter` → Jupiter API: Quote and swap transaction requests
+- `background/simulation-adapter` → Solana RPC: `simulateTransaction` calls
+- `background/jito-adapter` → Jito: Bundle submission
+- `sidepanel/wallet-bridge` → `contents/wallet-bridge`: Wallet detection and transaction signing via page injection
 
-## 6. 技术选型
+## 6. Technology Choices
 
-| 领域 | 选型 | 作用 |
+| Domain | Choice | Purpose |
 | --- | --- | --- |
-| 扩展框架 | Plasmo + React + TypeScript | 构建 Chrome 扩展与 Side Panel UI |
-| 推理模型 | OpenAI / Claude / 兼容模型 | 结构化意图解析 |
-| 本地计算 | Rust + wasm-bindgen | 风险扫描与高性能数据解析 |
-| 执行适配 | Solana Agent Kit + Jupiter API | 交易能力和链上动作封装 |
-| 链上数据 | Helius / QuickNode / 兼容 RPC | 余额、资产、模拟与订阅 |
+| Extension Framework | Plasmo + React + TypeScript | Build Chrome extension and Side Panel UI |
+| Reasoning Model | OpenAI / Claude / Compatible Models | Structured intent parsing |
+| Local Computation | Rust + wasm-bindgen | Risk scanning and high-performance data parsing |
+| Execution Adapter | Jupiter API + Jito | Quote, swap, and priority bundle submission |
+| On-chain Data | Helius / QuickNode / Compatible RPC | Balance, assets, simulation, and subscriptions |
+| Wallet | Phantom (`window.solana`) | Transaction signing via content script injection |
 
-## 7. 架构原则
+## 7. Architecture Principles
 
-- 云端只做语义推理，不做最终安全背书
-- 本地逻辑优先处理敏感、可验证与高频计算任务
-- 交易执行必须经过结构化校验和用户确认
-- UI 展示应始终能解释当前动作、风险和结果
-- 设计上优先支持 Demo 友好和后续模块扩展
+- Cloud only handles semantic reasoning; it does not provide final safety endorsement
+- Local logic prioritizes sensitive, verifiable, and high-frequency computation tasks
+- Transaction execution must pass structured validation and user confirmation
+- UI display should always be able to explain the current action, risk, and result
+- Design should prioritize demo-friendliness and future module extensibility

@@ -26,7 +26,20 @@
       "activeTab"
     ],
     "host_permissions": [
-      "<all_urls>"
+      "https://jup.ag/*",
+      "https://*.jup.ag/*",
+      "https://pump.fun/*",
+      "https://*.pump.fun/*",
+      "https://x.com/*",
+      "https://*.x.com/*",
+      "https://twitter.com/*",
+      "https://*.twitter.com/*",
+      "https://dexscreener.com/*",
+      "https://*.dexscreener.com/*",
+      "https://solscan.io/*",
+      "https://*.solscan.io/*",
+      "https://raydium.io/*",
+      "https://*.raydium.io/*"
     ],
     "content_security_policy": {
       "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"

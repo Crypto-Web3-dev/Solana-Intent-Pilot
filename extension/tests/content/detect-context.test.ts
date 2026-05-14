@@ -13,6 +13,7 @@ function installPage(options: {
   bodyText?: string;
   selectedText?: string;
   metaDescription?: string;
+  ogTitle?: string;
   links?: string[];
 }) {
   const links = (options.links ?? []).map((href) => ({
@@ -21,6 +22,10 @@ function installPage(options: {
   const querySelector = vi.fn((selector: string) => {
     if (selector === 'meta[name="description"]' && options.metaDescription) {
       return { getAttribute: () => options.metaDescription };
+    }
+
+    if (selector === 'meta[property="og:title"]' && options.ogTitle) {
+      return { getAttribute: () => options.ogTitle };
     }
 
     return null;
@@ -40,7 +45,7 @@ function installPage(options: {
       title: options.title ?? "Token post",
       body: { innerText: options.bodyText ?? "" },
       querySelector,
-      querySelectorAll: vi.fn((selector: string) => selector === "a[href]" ? links : [])
+      querySelectorAll: vi.fn((selector: string) => (selector === "a[href]" ? links : []))
     }
   });
 }
@@ -77,7 +82,7 @@ describe("detect context", () => {
       source: "twitter",
       confidence: 0.82
     });
-    expect(context.rawHints).toEqual(["Desc: BONK on Solana"]);
+    expect(context.rawHints).toEqual(["BONK on Solana"]);
     expect(context.detectedAt).toBeTypeOf("string");
   });
 
@@ -153,5 +158,30 @@ describe("detect context", () => {
       source: "generic",
       confidence: 0.96
     });
+  });
+
+  it("truncates free text inputs and limits body-derived hints", () => {
+    const mintA = "D27DgiipBR5dRdij2L6NQ27xwyiLK5Q2DsEM5ML5EuLK";
+    const mintB = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+    installPage({
+      href: "https://solscan.io",
+      bodyText: `${mintA} ${mintB} $BONK $WIF`,
+      selectedText: `${"SOL ".repeat(80)}`,
+      metaDescription: "A".repeat(120),
+      ogTitle: "B".repeat(120)
+    });
+
+    const context = captureContext();
+
+    expect((context.selectedText ?? "").length).toBeLessThanOrEqual(120);
+    expect(context.rawHints).toHaveLength(2);
+    expect(context.rawHints.every((hint) => hint.length <= 80)).toBe(true);
+    expect(
+      context.detectedTokens.filter((token) => Boolean(token.mint)).length
+    ).toBeLessThanOrEqual(2);
+    expect(
+      context.detectedTokens.filter((token) => ["BONK", "WIF"].includes(token.symbol ?? "")).length
+    ).toBeGreaterThanOrEqual(1);
   });
 });

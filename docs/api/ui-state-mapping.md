@@ -1,123 +1,123 @@
-# SIP UI 状态映射
+# SIP UI State Mapping
 
-## 1. 目标
+## 1. Purpose
 
-本文件定义运行时状态、UI 组件和用户可见反馈之间的映射关系，避免实现阶段出现：
+This file defines the mapping between runtime states, UI components, and user-visible feedback, to avoid the following during implementation:
 
-- 同一状态在不同组件里表现不一致
-- 错误态和阻断态混淆
-- UI 文案与底层工作流不同步
+- The same state behaving inconsistently across different components
+- Confusion between error states and blocked states
+- UI copy falling out of sync with the underlying workflow
 
-## 2. 顶层状态机
+## 2. Top-Level State Machine
 
-| 工作流状态 | 含义 | UI 主表现 |
+| Workflow State | Meaning | Primary UI Representation |
 | --- | --- | --- |
-| `idle` | 空闲，等待输入 | 显示空态或最近上下文 |
-| `detecting` | 正在感知页面 | Detection Bar 高亮或轻量 loading |
-| `parsing` | 正在解析自然语言 | ChatThread 显示解析中状态 |
-| `risk-checking` | 正在执行本地扫描 | RiskIndicator skeleton / loading |
-| `quoting` | 正在获取报价 | Action Card 占位态 |
-| `simulating` | 正在模拟交易 | Action Card 显示“模拟中” |
-| `awaiting-signature` | 等待钱包确认 | 主 CTA 进入签名等待态 |
-| `submitting` | 已签名，正在提交链上 | 状态条显示“提交中” |
-| `confirmed` | 已上链确认 | 成功卡片 / Explorer 链接 |
-| `failed` | 任一阶段失败 | 错误提示和重试入口 |
-| `blocked` | 被风险规则阻断 | 红色阻断卡片和原因说明 |
+| `idle` | Idle, awaiting input | Show empty state or most recent context |
+| `detecting` | Sensing the page | Detection Bar highlighted or lightweight loading |
+| `parsing` | Parsing natural language | ChatThread shows parsing-in-progress state |
+| `risk-checking` | Running local scan | RiskIndicator skeleton / loading |
+| `quoting` | Fetching quote | Action Card placeholder state |
+| `simulating` | Simulating transaction | Action Card shows "Simulating" |
+| `awaiting-signature` | Waiting for wallet confirmation | Main CTA enters signature-waiting state |
+| `submitting` | Signed, submitting on-chain | Status bar shows "Submitting" |
+| `confirmed` | On-chain confirmation received | Success card / Explorer link |
+| `failed` | Failed at any stage | Error message and retry entry |
+| `blocked` | Blocked by risk rule | Red blocking card with reason explanation |
 
-补充说明：
+Additional notes:
 
-- 风险结果中的 `unknown` 是风险标签，不是单独的工作流状态
-- 当风险数据不足但流程仍可继续时，工作流可保持在 `risk-checking` 之后的正常阶段，但 `RiskIndicator` 和 `ActionCard` 必须明确展示 `unknown`
+- The `unknown` in risk results is a risk label, not a separate workflow state
+- When risk data is insufficient but the workflow can still proceed, the workflow may remain in the normal stage after `risk-checking`, but `RiskIndicator` and `ActionCard` must explicitly display `unknown`
 
-## 3. 组件级映射
+## 3. Component-Level Mapping
 
 ### 3.1 Detection Bar
 
-| 状态 | UI 要求 |
+| State | UI Requirements |
 | --- | --- |
-| `idle` | 可隐藏或展示最近页面线索 |
-| `detecting` | 显示检测中动态提示 |
-| `confirmed` | 可回退为普通信息条 |
-| `failed` | 不承担主错误展示，可保持静默 |
+| `idle` | Can be hidden or show most recent page context |
+| `detecting` | Show detecting dynamic indicator |
+| `confirmed` | Can revert to a normal info bar |
+| `failed` | Does not bear primary error display; may remain silent |
 
 ### 3.2 ChatThread
 
-| 状态 | UI 要求 |
+| State | UI Requirements |
 | --- | --- |
-| `parsing` | 显示 AI 正在解析 |
-| `failed` | 显示解析失败说明 |
-| `blocked` | 显示 AI 风险解释摘要 |
-| `confirmed` | 显示成功摘要消息 |
+| `parsing` | Show AI is parsing |
+| `failed` | Show parsing failure explanation |
+| `blocked` | Show AI risk explanation summary |
+| `confirmed` | Show success summary message |
 
 ### 3.3 RiskIndicator
 
-| 状态 | UI 要求 |
+| State | UI Requirements |
 | --- | --- |
-| `risk-checking` | skeleton / 扫描中 |
-| `blocked` | 红色高亮，展示失败检查项 |
-| `confirmed` | 保留最终风险标签 |
-| `failed` | 若是扫描失败，显示“无法完成风险判断” |
+| `risk-checking` | skeleton / scanning in progress |
+| `blocked` | Red highlight, show failed check items |
+| `confirmed` | Retain final risk label |
+| `failed` | If scan failed, display "Unable to complete risk assessment" |
 
-风险标签补充：
+Risk label supplement:
 
-- `low`: 绿色通过态
-- `medium`: 黄色警示态
-- `high`: 红色高风险态
-- `unknown`: 灰黄或中性警示态，明确表达“数据不足，无法完整判断”
+- `low`: Green pass state
+- `medium`: Yellow warning state
+- `high`: Red high-risk state
+- `unknown`: Gray-yellow or neutral warning state, explicitly expressing "Insufficient data, unable to make a complete assessment"
 
 ### 3.4 ActionCard
 
-| 状态 | UI 要求 |
+| State | UI Requirements |
 | --- | --- |
-| `quoting` | 占位卡片 |
-| `simulating` | 主按钮禁用，副文案显示模拟中 |
-| `awaiting-signature` | 按钮显示等待签名 |
-| `submitting` | 按钮显示提交中 |
-| `confirmed` | 绿色成功态 |
-| `failed` | 红色错误态，允许重试 |
-| `blocked` | 红色阻断态，CTA 默认禁用 |
+| `quoting` | Placeholder card |
+| `simulating` | Main button disabled, secondary text shows simulating |
+| `awaiting-signature` | Button shows waiting for signature |
+| `submitting` | Button shows submitting |
+| `confirmed` | Green success state |
+| `failed` | Red error state, allow retry |
+| `blocked` | Red blocked state, CTA disabled by default |
 
-额外规则：
+Additional rules:
 
-- `riskLevel = unknown` 时，若策略允许继续预览，CTA 可保持可用，但必须附带显著风险提示
-- `blocked` 与 `failed` 必须区分：前者是策略性阻断，后者是系统或外部调用失败
+- When `riskLevel = unknown`, if policy allows continuing preview, the CTA may remain usable, but must be accompanied by a prominent risk warning
+- `blocked` and `failed` must be distinguished: the former is a policy-based block, the latter is a system or external call failure
 
-## 4. 文案建议
+## 4. Copy Suggestions
 
-### 4.1 处理中
+### 4.1 In Progress
 
-- `正在解析你的意图...`
-- `正在扫描目标资产风险...`
-- `正在获取最佳交易路径...`
-- `正在模拟签名前结果...`
+- `Parsing your intent...`
+- `Scanning target asset risk...`
+- `Fetching the best trade route...`
+- `Simulating pre-signature results...`
 
-### 4.2 阻断
+### 4.2 Blocked
 
-- `检测到高风险信号，已阻止继续执行`
-- `该资产存在 Mint Authority，存在增发风险`
-- `风险数据不足，暂不建议继续`
+- `High-risk signal detected; execution has been blocked`
+- `This asset has Mint Authority, posing an inflation risk`
+- `Risk data insufficient; proceeding is not recommended at this time`
 
-### 4.3 数据不足
+### 4.3 Insufficient Data
 
-- `部分风险数据暂不可用，请谨慎判断`
-- `当前只能完成部分检查，结果不代表资产安全`
+- `Some risk data is temporarily unavailable; please proceed with caution`
+- `Only partial checks could be completed; results do not guarantee asset safety`
 
-### 4.4 失败
+### 4.4 Failed
 
-- `未能解析成可执行意图`
-- `报价暂时不可用，请稍后重试`
-- `模拟失败，无法给出可靠预览`
+- `Could not parse into an executable intent`
+- `Quote temporarily unavailable; please try again later`
+- `Simulation failed; unable to provide a reliable preview`
 
-## 5. 颜色和视觉规则
+## 5. Color and Visual Rules
 
-- `处理中`: 使用品牌主色或中性 loading
-- `成功`: 使用绿色
-- `失败`: 使用红色，但区别于阻断
-- `阻断`: 使用更高强调度的红色，并附带具体原因
-- `低置信度`: 使用黄色提示，不等同于错误
+- `In progress`: Use brand primary color or neutral loading
+- `Success`: Use green
+- `Failed`: Use red, but distinguish from blocked
+- `Blocked`: Use a more emphasized red, accompanied by a specific reason
+- `Low confidence`: Use yellow as a prompt, not equivalent to an error
 
-## 6. 实现建议
+## 6. Implementation Suggestions
 
-- 不要让每个组件各自推导状态，统一由 workflow state 驱动
-- UI 文案优先集中配置，避免不同文件出现不一致表达
-- 同一个状态在不同组件中的表现可以不同，但语义必须一致
+- Do not let each component infer state independently; drive everything from the workflow state
+- Prefer centralized UI copy configuration to avoid inconsistent expressions across different files
+- The same state may appear differently in different components, but the semantics must be consistent

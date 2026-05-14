@@ -1,32 +1,32 @@
-# Blink 风格 UI/UX 全面升级 实施计划
+# Blink-Style UI/UX Comprehensive Upgrade Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 Side Panel 的 Action Card 升级为具有视觉冲击力的、高集成度的 Blink 风格界面，包含资产变化预览、风险动效和成功反馈。
+**Goal:** Upgrade the Side Panel's Action Card to a visually striking, highly integrated Blink-style interface, including asset change preview, risk animations, and success feedback.
 
-**Architecture:** 采用 React + Vanilla CSS + Framer Motion 的混合方案。ActionCard 将重构为模块化堆叠布局，支持实时风险配色切换。
+**Architecture:** Adopt a hybrid approach of React + Vanilla CSS + Framer Motion. ActionCard will be refactored into a modular stacked layout, supporting real-time risk color scheme switching.
 
 **Tech Stack:** React, Framer Motion, canvas-confetti, lucide-react
 
 ---
 
-### Task 1: 基础设施与动画准备
+### Task 1: Infrastructure and Animation Preparation
 
 **Files:**
 - Modify: `extension/package.json`
 - Modify: `extension/src/sidepanel/styles.css`
 
-- [ ] **Step 1: 安装必要依赖**
+- [ ] **Step 1: Install required dependencies**
 
 ```bash
 pnpm add framer-motion canvas-confetti
 pnpm add -D @types/canvas-confetti
 ```
 
-- [ ] **Step 2: 在 styles.css 中添加新的动画关键帧**
+- [ ] **Step 2: Add new animation keyframes in styles.css**
 
 ```css
-/* Scan Ray 动画 */
+/* Scan Ray animation */
 @keyframes scan-ray-move {
   0% { left: -100%; }
   100% { left: 100%; }
@@ -46,7 +46,7 @@ pnpm add -D @types/canvas-confetti
   animation: scan-ray-move 2s infinite linear;
 }
 
-/* 高风险闪烁 */
+/* High-risk pulse */
 @keyframes high-risk-pulse {
   0% { border-color: rgba(255, 75, 75, 0.2); }
   50% { border-color: rgba(255, 75, 75, 0.8); box-shadow: 0 0 10px rgba(255, 75, 75, 0.3); }
@@ -58,7 +58,7 @@ pnpm add -D @types/canvas-confetti
 }
 ```
 
-- [ ] **Step 3: 提交更改**
+- [ ] **Step 3: Commit changes**
 
 ```bash
 git add extension/package.json extension/src/sidepanel/styles.css
@@ -67,31 +67,31 @@ git commit -m "chore: add animation dependencies and keyframes"
 
 ---
 
-### Task 2: 重构 ActionCard 基础布局与配色方案
+### Task 2: Refactor ActionCard Base Layout and Color Scheme
 
 **Files:**
 - Modify: `extension/src/sidepanel/components/ActionCard.tsx`
 - Test: `extension/tests/sidepanel/action-card.test.tsx`
 
-- [ ] **Step 1: 更新测试用例以匹配新布局**
+- [ ] **Step 1: Update test cases to match the new layout**
 
 ```typescript
-// 修改 tests/sidepanel/action-card.test.tsx 确保它检查新的 Header 文本
+// Modify tests/sidepanel/action-card.test.tsx to ensure it checks the new Header text
 expect(html).toContain("SOLANA INTENT PILOT");
 ```
 
-- [ ] **Step 2: 实现新的模块化堆叠布局**
+- [ ] **Step 2: Implement the new modular stacked layout**
 
 ```tsx
-// 在 ActionCard.tsx 中重构返回值
+// Refactor the return value in ActionCard.tsx
 return (
-  <motion.div 
+  <motion.div
     initial={{ y: 20, opacity: 0 }}
     animate={{ y: 0, opacity: 1 }}
     transition={{ type: "spring", damping: 20, stiffness: 300 }}
-    style={{ 
-      padding: 16, 
-      background: "#020617", 
+    style={{
+      padding: 16,
+      background: "#020617",
       border: `1px solid ${risk?.level === "high" ? "#FF4B4B" : "rgba(255,255,255,0.08)"}`,
       borderRadius: 16,
       className: risk?.level === "high" ? "animate-high-risk" : ""
@@ -103,12 +103,12 @@ return (
          {preview?.routeLabel === "Atomic Bundle" ? "STRATEGY" : "SWAP"}
        </div>
     </div>
-    {/* 后续步骤填充具体内容 */}
+    {/* Subsequent steps will fill in the specific content */}
   </motion.div>
 );
 ```
 
-- [ ] **Step 3: 验证并提交**
+- [ ] **Step 3: Verify and commit**
 
 ```bash
 pnpm test tests/sidepanel/action-card.test.tsx
@@ -118,12 +118,12 @@ git commit -m "feat: refactor ActionCard base layout"
 
 ---
 
-### Task 3: 实现资产变化预览 (Balance Change)
+### Task 3: Implement Asset Change Preview (Balance Change)
 
 **Files:**
 - Modify: `extension/src/sidepanel/components/ActionCard.tsx`
 
-- [ ] **Step 1: 实现直观的余额变化区域**
+- [ ] **Step 1: Implement the intuitive balance change area**
 
 ```tsx
 const BalanceArea = () => (
@@ -143,7 +143,7 @@ const BalanceArea = () => (
 );
 ```
 
-- [ ] **Step 2: 提交更改**
+- [ ] **Step 2: Commit changes**
 
 ```bash
 git add extension/src/sidepanel/components/ActionCard.tsx
@@ -152,12 +152,12 @@ git commit -m "feat: add balance change preview to ActionCard"
 
 ---
 
-### Task 4: 风控增强与动画细节
+### Task 4: Risk Control Enhancement and Animation Details
 
 **Files:**
 - Modify: `extension/src/sidepanel/components/ActionCard.tsx`
 
-- [ ] **Step 1: 实现带有“蓝光扫描”的风险指示器**
+- [ ] **Step 1: Implement the risk indicator with "blue light scan"**
 
 ```tsx
 const RiskIndicator = () => (
@@ -171,7 +171,7 @@ const RiskIndicator = () => (
 );
 ```
 
-- [ ] **Step 2: 交易成功后触发 Confetti**
+- [ ] **Step 2: Trigger Confetti on transaction success**
 
 ```typescript
 useEffect(() => {
@@ -186,7 +186,7 @@ useEffect(() => {
 }, [isSucceeded]);
 ```
 
-- [ ] **Step 3: 提交更改**
+- [ ] **Step 3: Commit changes**
 
 ```bash
 git add extension/src/sidepanel/components/ActionCard.tsx
@@ -195,19 +195,19 @@ git commit -m "feat: add risk scan ray and success confetti"
 
 ---
 
-### Task 5: 最终集成与 Demo 路径验证
+### Task 5: Final Integration and Demo Path Verification
 
 **Files:**
 - Modify: `extension/src/sidepanel/pages/SidePanelPage.tsx`
 
-- [ ] **Step 1: 确保状态流畅传递并适配新 UI**
-- [ ] **Step 2: 运行完整冒烟测试**
+- [ ] **Step 1: Ensure state flows smoothly and adapts to the new UI**
+- [ ] **Step 2: Run full smoke tests**
 
 ```bash
 pnpm test
 ```
 
-- [ ] **Step 3: 提交并清理工作树**
+- [ ] **Step 3: Commit and clean up the working tree**
 
 ```bash
 git add .

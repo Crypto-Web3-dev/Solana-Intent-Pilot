@@ -1,153 +1,215 @@
-# SIP 模块拆分
+# SIP Module Breakdown
 
-## 1. 模块总览
+## 1. Module Overview
 
-SIP 建议拆分为五个核心模块，每个模块聚焦单一职责，同时通过清晰的消息边界协同工作。
+SIP is organized into six core modules, each focused on a single responsibility while collaborating through typed messages.
 
-## 2. 模块清单
+## 2. Module List
 
 ### 2.1 Web Context Capture
 
-职责：
+Source: `extension/src/content/detect-context.ts`
 
-- 监听 DOM 变化与用户交互
-- 识别页面中的代币符号、Mint 地址与文本线索
-- 提取标题、URL、选中文本等上下文
+Responsibilities:
 
-关键实现：
+- Listen for DOM changes and user interactions
+- Identify token symbols, Mint addresses, and text clues on the page
+- Extract context such as title, URL, and selected text
+- Enforce input bounds (MAX_BODY_TEXT_CHARS, MAX_SELECTED_TEXT_CHARS, etc.)
+
+Key implementation:
 
 - `MutationObserver`
-- Base58 地址正则过滤
-- 平台定制选择器（Twitter、Birdeye、Dexscreener 等）
+- Base58 address regex filtering
+- Platform-specific detection: Twitter, Dexscreener, generic (Birdeye detection from context source tag)
+- Pump.fun URL regex for direct mint extraction
 
-输入输出：
+Input/Output:
 
-- 输入：当前网页 DOM、用户选择行为
-- 输出：`DetectedContext` 消息发送至 Background/Side Panel
+- Input: current page DOM, user selection behavior
+- Output: `context.detected` message with `DetectedContextSnapshot` payload
 
 ### 2.2 Intent Intelligence
 
-职责：
+Source: `extension/src/background/openai-intent-parser.ts`, `intent-parser.ts`
 
-- 组织系统 Prompt 与上下文
-- 调用 LLM 输出结构化 Intent
-- 处理模型置信度、澄清需求与异常输出
+Responsibilities:
 
-关键实现：
+- Assemble system prompt with page context and token hints
+- Call LLM to output structured `SIPIntent`
+- Handle model confidence, clarification needs, and anomalous output
+- Enrich intent with on-chain token data via `token-context-enricher.ts`
 
-- Few-shot Prompt
-- JSON Schema / Zod 校验
-- 流式输出与失败兜底
+Key implementation:
 
-输入输出：
+- Few-shot prompt with context injection
+- JSON Schema / Zod validation
+- Fallback to policy-based parsing on failure
+- `ClarificationPayload` for ambiguous or missing mint resolution
 
-- 输入：用户命令、页面上下文、资产上下文
-- 输出：标准 `Intent` 对象
+Input/Output:
 
-### 2.3 Local Wasm Engine
+- Input: user command, page context (`DetectedContextSnapshot`), enriched token data
+- Output: standard `SIPIntent` object with actions, metadata, and optional clarification
 
-职责：
+### 2.3 Local Wasm Risk Engine
 
-- 风险扫描与链上数据解析
-- Mint / Freeze 权限检查
-- 为 UI 提供评分、标签和解释
+Source: `risk-engine/src/lib.rs`, `extension/src/background/wasm-risk-engine.ts`, `risk-adapter.ts`
 
-关键实现：
+Responsibilities:
 
-- Rust + `wasm-bindgen`
-- `solana-program` / `spl-token`
-- 统一的 `SecurityReport` 返回结构
+- Risk scanning using 5 rule-based checks
+- Mint Authority / Freeze Authority checks (AuthorityRule)
+- Economic, trust, lifecycle, and blacklist checks
+- Provide scores, labels, and explanations for UI
 
-输入输出：
+Key implementation:
 
-- 输入：账户原始数据、交易目标对象
-- 输出：风险分值、风险标签、解释说明
+- Rust + `wasm-bindgen`, compiled via `wasm-pack build --target web`
+- Exports `scan_risk(intent_json: &str) -> String`
+- 5 rules: BlacklistRule, AuthorityRule, EconomicRule, TrustRule, LifecycleRule
+- Unified `SecurityReport` return structure with `source: RiskEngineSource`
+- Policy fallback (`policy-fallback`) when Wasm is unavailable
+- Live on-chain data enrichment via Jupiter API + Helius RPC
+
+Input/Output:
+
+- Input: `SIPIntent` (JSON-serialized)
+- Output: `SecurityReport` with score, level, blocking, checks[], summary, source
 
 ### 2.4 On-chain Execution Adapter
 
-职责：
+Source: `extension/src/background/quote-adapter.ts`, `preview-adapter.ts`, `simulation-adapter.ts`, `jito-adapter.ts`
 
-- 连接 Jupiter、钱包和 Solana RPC
-- 获取报价、构建交易、执行模拟
-- 发送交易并回传结果
+Responsibilities:
 
-关键实现：
+- Connect Jupiter for quotes and swap transactions
+- Build execution previews with slippage and fee details
+- Run transaction simulations via RPC
+- Submit transactions via Jito bundles for priority execution
 
-- Jupiter `/quote` 与 `/swap`
-- `simulateTransaction`
-- 钱包签名流程与优先费策略
+Key implementation:
 
-输入输出：
+- Jupiter V2 `/quote` and `/swap` API with x-api-key authentication
+- `simulateTransaction` via Solana RPC
+- Jito bundle submission with tip
+- `ExecutionPreview` with input/output amounts, fees, and unsigned transaction
 
-- 输入：标准 Intent、风险校验结果
-- 输出：交易预览、签名请求、链上执行状态
+Input/Output:
 
-### 2.5 Side Panel Experience
+- Input: standard `SIPIntent`, risk check result
+- Output: `ExecutionPreview`, transaction signature, submission status
 
-职责：
+### 2.5 Wallet Bridge
 
-- 承载对话、风险卡片与操作卡片
-- 展示页面感知结果和执行反馈
-- 提供最小学习成本的交互入口
+Source: `extension/src/contents/wallet-bridge.ts`, `extension/src/sidepanel/wallet-bridge.ts`
 
-关键实现：
+Responsibilities:
 
-- React 组件树
-- Tailwind 主题系统
-- Framer Motion 状态动画
+- Detect wallet presence (Phantom) on supported pages
+- Find signable tabs from the page allowlist
+- Submit transactions for signing via `window.solana.signAndSendTransaction`
+- Handle wallet status states and 60s submission timeout
 
-输入输出：
+Key implementation:
 
-- 输入：上下文检测结果、Intent、风险报告、执行状态
-- 输出：用户交互事件、确认动作、可视反馈
+- Plasmo content script with `config.matches = SUPPORTED_PAGE_MATCHES`
+- Script injection into supported pages for wallet detection and signing
+- `findSignableTab()` filters tabs by supported URL
+- `WalletStatus` type: `unknown | checking | ready | provider-missing | unsupported-page | connecting | submitted | failed`
 
-## 3. 推荐目录结构
+Input/Output:
+
+- Input: `SIPIntent`, `ExecutionPreview`, preferred tab ID
+- Output: transaction signature or failure
+
+### 2.6 Side Panel Experience
+
+Source: `extension/src/sidepanel/`
+
+Responsibilities:
+
+- Host conversation, risk cards, and action cards
+- Display page-awareness results and execution feedback
+- Provide a low-learning-curve interaction entry point
+- Manage wallet connection and signing UI
+
+Key implementation:
+
+- React component tree with SidePanelPage as root
+- Components: ActionCard, DetectionBar, ExecutionProgress, IntentSummaryCard, RiskIndicator, StrategyViz
+- `useSidePanelState` hook for workflow state management
+- Framer Motion state animation
+- Tailwind theme system
+
+Input/Output:
+
+- Input: context detection results, Intent, risk report, execution status
+- Output: user interaction events, confirmation actions, visual feedback
+
+## 3. Recommended Directory Structure
 
 ```text
-sip-project/
-├── extension/
-│   ├── src/
-│   │   ├── content/
-│   │   │   └── detect-context.ts
-│   │   ├── background/
-│   │   │   └── message-router.ts
-│   │   ├── sidepanel/
-│   │   │   ├── pages/
-│   │   │   ├── components/
-│   │   │   └── hooks/
-│   │   └── shared/
-│   │       ├── intent.ts
-│   │       ├── messages.ts
-│   │       └── risk.ts
-├── core-engine/
-│   ├── src/
-│   │   └── lib.rs
-│   └── Cargo.toml
-├── services/
-│   ├── ai/
-│   │   ├── prompt.ts
-│   │   └── parse-intent.ts
-│   └── execution/
-│       ├── jupiter.ts
-│       ├── simulate.ts
-│       └── wallet.ts
-└── docs/
+extension/src/
+├── content/
+│   └── detect-context.ts
+├── contents/
+│   └── wallet-bridge.ts
+├── background/
+│   ├── index.ts
+│   ├── message-router.ts
+│   ├── workflow-engine.ts
+│   ├── openai-intent-parser.ts
+│   ├── intent-parser.ts
+│   ├── risk-adapter.ts
+│   ├── wasm-risk-engine.ts
+│   ├── quote-adapter.ts
+│   ├── preview-adapter.ts
+│   ├── simulation-adapter.ts
+│   ├── jito-adapter.ts
+│   ├── token-context-enricher.ts
+│   ├── runtime-services.ts
+│   ├── mock-services.ts
+│   └── wasm/
+├── sidepanel/
+│   ├── index.tsx
+│   ├── page-context.ts
+│   ├── wallet-bridge.ts
+│   ├── wallet-provider.ts
+│   ├── wallet-state.ts
+│   ├── token-confirmation.ts
+│   ├── pages/
+│   ├── components/
+│   └── hooks/
+├── shared/
+│   ├── intent.ts
+│   ├── messages.ts
+│   ├── risk.ts
+│   ├── context.ts
+│   ├── execution.ts
+│   ├── workflow.ts
+│   ├── supported-pages.ts
+│   └── demo-mode.ts
 ```
 
-## 4. 模块之间的边界约束
+## 4. Module Communication
 
-- Content Script 只负责感知，不做交易决策
-- LLM 输出必须经过 schema 校验，不能直接驱动交易
-- Wasm 风险引擎不持有 UI 状态，只返回纯数据
-- 执行层必须读取风险结果与用户确认状态
-- Background 是主编排层，负责工作流状态机、外部请求调度和跨上下文状态同步
-- Side Panel 只负责展示状态、接收输入和发送确认动作，不直接编排 LLM、RPC 或 Wasm 调用
+Modules communicate through typed message interfaces defined in `shared/messages.ts` (17+ message types):
 
-## 5. 优先实现顺序
+- Content → Background: `context.detected`
+- Background → Side Panel: `intent.parse.succeeded`, `risk.scan.completed`, `execution.preview.ready`, `workflow.state.changed`
+- Side Panel → Background: `execution.confirmed`, `execution.cancelled`, `execution.retry.requested`
+- Wasm → Risk Adapter: `SecurityReport`
+- Wallet Bridge → Background: `wallet.submission.completed`, `wallet.submission.failed`
 
-1. Side Panel 基础框架与消息总线
-2. 页面上下文检测
-3. Intent 解析与 Schema 校验
-4. Jupiter 报价与模拟链路
-5. Rust/Wasm 风险扫描
-6. UI 细节和演示增强
+## 5. Data Flow
+
+```
+Web Page → Content Script (detect) → Background (route) → LLM (parse) → SIPIntent
+                                                                   ↓
+                                                     Wasm (risk check) → SecurityReport
+                                                                   ↓
+                                               Jupiter (quote) → ExecutionPreview
+                                                                   ↓
+                                              Wallet (sign) → On-chain Submit (Jito)
+```

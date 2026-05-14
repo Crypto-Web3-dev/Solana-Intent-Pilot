@@ -1,109 +1,109 @@
-# SIP 验收标准
+# SIP Acceptance Criteria
 
-## 1. 目标
+## 1. Purpose
 
-本文件用于定义 SIP MVP 的验收标准，作为开发完成、自测完成和演示准备完成的统一依据。
+This document defines the acceptance criteria for the SIP MVP, serving as a unified basis for determining when development, self-testing, and demo preparation are complete.
 
-## 2. MVP 验收范围
+## 2. MVP Acceptance Scope
 
-MVP 需要至少覆盖以下闭环：
+The MVP must cover at least the following end-to-end loop:
 
-- 页面上下文检测
-- 自然语言意图解析
-- 本地风险扫描
-- 报价与模拟预览
-- 钱包签名与结果反馈
+- Page context detection
+- Natural language intent parsing
+- Local risk scanning
+- Quote and simulation preview
+- Wallet signing and result feedback
 
-## 3. 功能验收标准
+## 3. Functional Acceptance Criteria
 
-### 3.1 页面感知
+### 3.1 Page Awareness
 
-验收标准：
+Acceptance criteria:
 
-- 在目标页面中能够识别至少一种 token 线索或 Solana 地址
-- Side Panel 能展示当前页面的上下文摘要
-- 页面切换后上下文能够更新或清空
+- Able to identify at least one token clue or Solana address on the target page
+- Side Panel can display a context summary of the current page
+- Context updates or clears when the user switches pages
 
-通过条件：
+Pass condition:
 
-- 用户打开支持页面时能看到 Detection Bar 或上下文卡片
+- When the user opens a supported page, they can see the Detection Bar or context card
 
-### 3.2 意图解析
+### 3.2 Intent Parsing
 
-验收标准：
+Acceptance criteria:
 
-- 用户输入自然语言后，系统能返回合法的 `SIPIntent`
-- 非法结构、低置信度和需要澄清三类结果都有明确提示
-- UI 能展示解析摘要而不是原始 JSON
+- After the user inputs natural language, the system returns a valid `SIPIntent`
+- Three categories of results — invalid structure, low confidence, and needs clarification — all have clear prompts
+- The UI displays a parsing summary rather than raw JSON
 
-通过条件：
+Pass condition:
 
-- 至少 3 条典型输入可以稳定生成可校验 Intent
+- At least 3 typical inputs can stably generate verifiable Intents
 
-### 3.3 风险扫描
+### 3.3 Risk Scanning
 
-验收标准：
+Acceptance criteria:
 
-- 对目标 mint 可返回结构化风险报告
-- 高风险结果能触发阻断
-- 风险缺失时显示 `unknown`，且不会显示为安全
+- Returns a structured risk report for the target mint
+- High-risk results trigger blocking
+- When risk data is missing, displays `unknown` and never appears as safe
 
-通过条件：
+Pass condition:
 
-- 至少能区分 `low` / `high` / `unknown` 三档状态
+- Can at least distinguish between `low` / `high` / `unknown` severity levels
 
-### 3.4 交易预览
+### 3.4 Transaction Preview
 
-验收标准：
+Acceptance criteria:
 
-- 能返回报价结果
-- Action Card 可显示输入输出资产、滑点和模拟摘要
-- 报价或模拟失败时有可理解的错误提示
+- Can return a quote result
+- Action Card displays input/output assets, slippage, and simulation summary
+- When quoting or simulation fails, provides an understandable error message
 
-通过条件：
+Pass condition:
 
-- 用户在签名前能看到完整预览卡片
+- The user can see a complete preview card before signing
 
-### 3.5 交易执行
+### 3.5 Transaction Execution
 
-验收标准：
+Acceptance criteria:
 
-- 用户确认后能唤起钱包签名
-- 成功后 UI 展示链上提交结果
-- 用户取消签名时不会卡死在提交态
+- After user confirmation, invokes wallet signing
+- On success, the UI displays the on-chain submission result
+- When the user cancels signing, the UI does not get stuck in the submitting state
 
-通过条件：
+Pass condition:
 
-- 完成一次真实或受控测试环境中的签名链路验证
+- Completes one signing flow verification in a real or controlled test environment
 
-## 4. 安全验收标准
+## 4. Security Acceptance Criteria
 
-- 未通过 schema 校验的 intent 不得进入执行链
-- `needsClarification = true` 的 intent 不得进入报价和签名链
-- 高风险阻断必须有具体原因
-- 签名前必须展示输入资产、输出资产和协议来源
-- 不得出现“AI 已验证安全”这类误导性表达
-- MVP 默认不开放 high-risk override
+- Intents that fail schema validation must not enter the execution chain
+- Intents with `needsClarification = true` must not enter the quote and signing chain
+- High-risk blocking must include a specific reason
+- Before signing, input assets, output assets, and protocol source must be displayed
+- Misleading expressions such as "AI has verified this is safe" must never appear
+- High-risk override is disabled by default in the MVP
 
-## 5. 体验验收标准
+## 5. UX Acceptance Criteria
 
-- Side Panel 首屏结构清晰
-- 用户能够理解当前处于哪个阶段
-- 错误态和加载态可被清晰区分
-- 关键 CTA 始终明确且不歧义
+- The Side Panel first screen has a clear structure
+- The user can understand which stage they are currently in
+- Error states and loading states are clearly distinguishable
+- Key CTAs are always clear and unambiguous
 
-## 6. 演示验收标准
+## 6. Demo Acceptance Criteria
 
-- 能在 3 分钟内演示完整闭环
-- 至少准备一条成功路径
-- 至少准备一条风险阻断路径
-- 页面感知和 Action Card 必须有明显视觉反馈
+- Can demonstrate the complete end-to-end loop within 3 minutes
+- At least one success path is prepared
+- At least one risk blocking path is prepared
+- Page awareness and Action Card must have obvious visual feedback
 
 ## 7. Definition of Done
 
-当以下条件同时满足时，可认为 SIP MVP 达到可演示验收状态：
+The SIP MVP can be considered ready for demo acceptance when all of the following conditions are simultaneously met:
 
-- 核心闭环功能可运行
-- 主要异常路径有反馈
-- 文档与当前实现保持一致
-- QA 清单中的关键项已走查
+- Core end-to-end functionality is operational
+- Major error paths have feedback
+- Documentation is consistent with the current implementation
+- Critical items in the QA checklist have been reviewed

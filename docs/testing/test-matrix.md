@@ -1,74 +1,74 @@
-# SIP 测试矩阵
+# SIP Test Matrix
 
-## 1. 目标
+## 1. Purpose
 
-本文件从“功能 x 状态 x 环境”三个维度组织测试范围，帮助在时间有限时优先覆盖最关键场景。
+This document organizes the test scope across three dimensions — "Feature x State x Environment" — to help prioritize coverage of the most critical scenarios when time is limited.
 
-## 2. 功能维度
+## 2. Feature Dimension
 
-| 功能 | 关键场景 | 优先级 |
+| Feature | Key Scenario | Priority |
 | --- | --- | --- |
-| 页面感知 | 页面检测到 token 或地址 | P0 |
-| 意图解析 | 自然语言生成合法 Intent | P0 |
-| 风险扫描 | 高风险能阻断 | P0 |
-| 交易预览 | Action Card 正常显示 | P0 |
-| 钱包执行 | 可唤起签名并返回结果 | P0 |
-| 异常处理 | LLM / RPC / simulate 失败 | P1 |
-| UI 细节 | 窄面板适配、状态样式 | P1 |
+| Page Awareness | Page detects token or address | P0 |
+| Intent Parsing | Natural language generates valid Intent | P0 |
+| Risk Scanning | High risk triggers blocking | P0 |
+| Transaction Preview | Action Card displays correctly | P0 |
+| Wallet Execution | Can invoke signing and return result | P0 |
+| Error Handling | LLM / RPC / simulate failure | P1 |
+| UI Details | Narrow panel adaptation, state styles | P1 |
 
-## 3. 状态维度
+## 3. State Dimension
 
-| 状态 | 示例 | 优先级 |
+| State | Example | Priority |
 | --- | --- | --- |
-| 成功 | 成功解析、成功预览、成功签名 | P0 |
-| 低置信度 | 无法确定目标 token | P0 |
-| 风险阻断 | Mint Authority 风险 | P0 |
-| 报价失败 | RPC 或 Jupiter 异常 | P1 |
-| 模拟失败 | `simulateTransaction` 返回错误 | P1 |
-| 用户取消 | 钱包签名中止 | P1 |
+| Success | Successful parsing, preview, signing | P0 |
+| Low Confidence | Unable to determine target token | P0 |
+| Risk Blocking | Mint Authority risk | P0 |
+| Quote Failure | RPC or Jupiter exception | P1 |
+| Simulation Failure | `simulateTransaction` returns error | P1 |
+| User Cancellation | Wallet signing aborted | P1 |
 
-## 4. 环境维度
+## 4. Environment Dimension
 
-| 环境 | 说明 | 优先级 |
+| Environment | Description | Priority |
 | --- | --- | --- |
-| 本地静态 mock | 不接真实 LLM / 链上服务 | P0 |
-| 本地真实 API | 接真实 LLM、RPC、Jupiter | P0 |
-| 演示环境 | 用于彩排和录屏的稳定环境 | P0 |
-| 弱网络 | 模拟 API 慢或失败 | P1 |
+| Local Static Mock | Not connected to real LLM / on-chain services | P0 |
+| Local Real API | Connected to real LLM, RPC, Jupiter | P0 |
+| Demo Environment | Stable environment for rehearsal and screen recording | P0 |
+| Weak Network | Simulating slow or failing APIs | P1 |
 
-## 5. 推荐最小覆盖集
+## 5. Recommended Minimum Coverage Set
 
-### 5.1 P0 必测
+### 5.1 P0 Must-Test
 
-- 页面感知成功
-- Intent 成功解析
-- 高风险成功阻断
-- 成功展示 Action Card
-- 成功唤起钱包签名
+- Page awareness success
+- Intent parsing success
+- High risk successfully blocked
+- Action Card displayed successfully
+- Wallet signing invoked successfully
 
-### 5.2 P1 建议补测
+### 5.2 P1 Suggested Additional Tests
 
-- 低置信度场景
-- 报价失败
-- 模拟失败
-- 用户取消签名
-- 弱网络下的错误提示
+- Low-confidence scenario
+- Quote failure
+- Simulation failure
+- User cancels signing
+- Error prompts under weak network
 
-## 6. 推荐测试顺序
+## 6. Recommended Test Order
 
-1. 使用 `sample-payloads` 跑通静态 mock
-2. 接真实 LLM 和 RPC 验证成功链路
-3. 使用 `risk-cases` 验证阻断链路
-4. 最后走一遍 Demo 全流程彩排
+1. Use `sample-payloads` to run through static mocks
+2. Connect to real LLM and RPC to verify the success chain
+3. Use `risk-cases` to verify the blocking chain
+4. Finally, run through the full demo rehearsal flow
 
-## 7. 结果记录建议
+## 7. Result Recording Suggestions
 
-每轮测试至少记录：
+Each test round should record at least:
 
-- 日期
-- 环境
-- 测试页面
-- 结果：pass / fail
-- 问题摘要
+- Date
+- Environment
+- Test page
+- Result: pass / fail
+- Issue summary
 
-如果时间允许，可在后续补一个 `test-report.md` 模板用于固定记录。
+If time permits, a `test-report.md` template can be added later for standardized recording.

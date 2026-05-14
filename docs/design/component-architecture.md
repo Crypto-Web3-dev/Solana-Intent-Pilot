@@ -1,169 +1,129 @@
-# SIP 前端组件架构
+# SIP Frontend Component Architecture
 
-## 1. 目标
+## 1. Goals
 
-前端组件架构需要支持三件事：
+The frontend component architecture needs to support three things:
 
-- Side Panel 中的复杂状态展示
-- AI、风险扫描和执行流程的连续反馈
-- 后续快速替换视觉样式而不破坏业务边界
+- Complex state display in the Side Panel
+- Continuous feedback from AI, risk scanning, and execution flows
+- Quick visual style replacement later without breaking business boundaries
 
-## 2. 页面结构
+## 2. Page Structure
 
-建议 Side Panel 入口页面拆为：
+The Side Panel entry page is organized as:
 
-- `SidePanelPage`: 顶层容器，负责状态订阅和布局编排
-- `HeaderBar`: 品牌、钱包状态、网络状态
-- `DetectionBar`: 页面感知提醒条
-- `ChatThread`: 对话和系统消息流
-- `ActionCardStack`: 一个或多个执行卡片
-- `Composer`: 输入框和快捷动作
+- `SidePanelPage`: Top-level container, responsible for state subscription and layout orchestration
+- `DetectionBar`: Page-aware alert bar
+- `ActionCard`: Primary execution card with risk display and confirmation actions
+- `IntentSummaryCard`: Parsed intent summary display
+- `RiskIndicator`: Risk level visual indicator (shield icon + color)
+- `ExecutionProgress`: Execution status and transaction progress
+- `StrategyViz`: Strategy visualization
 
-## 3. 组件分层
+## 3. Component Inventory
 
-### 3.1 Shell 层
+### 3.1 Page Layer
 
-负责页面布局和上下文装配：
+| Component | File | Responsibility |
+|-----------|------|---------------|
+| SidePanelPage | `pages/SidePanelPage.tsx` | Root page, state subscription, layout |
 
-- `SidePanelPage`
-- `AppShell`
-- `PanelSection`
+### 3.2 Domain Components
 
-### 3.2 Domain 组件层
+| Component | File | Responsibility |
+|-----------|------|---------------|
+| ActionCard | `components/ActionCard.tsx` | Primary execution card, risk display, confirm/cancel actions |
+| DetectionBar | `components/DetectionBar.tsx` | Page-aware alert bar showing detected tokens |
+| ExecutionProgress | `components/ExecutionProgress.tsx` | Transaction execution status and progress |
+| IntentSummaryCard | `components/IntentSummaryCard.tsx` | Parsed intent summary (input/output amounts) |
+| RiskIndicator | `components/RiskIndicator.tsx` | Risk level shield with color (green/yellow/red) |
+| StrategyViz | `components/StrategyViz.tsx` | Strategy visualization |
 
-负责承载具体业务对象：
+### 3.3 Hooks
 
-- `IntentSummaryCard`
-- `RiskIndicator`
-- `ActionCard`
-- `ExecutionStatusBanner`
-- `WalletStatusChip`
+| Hook | File | Responsibility |
+|------|------|---------------|
+| useSidePanelState | `hooks/useSidePanelState.ts` | Central workflow state management |
 
-### 3.3 Primitive 层
+### 3.4 Side Panel Modules
 
-负责复用基础 UI：
+| Module | File | Responsibility |
+|--------|------|---------------|
+| page-context | `page-context.ts` | Page context selection (tabs, content script queries) |
+| wallet-bridge | `wallet-bridge.ts` | Wallet detection, signable tab selection, transaction submission |
+| wallet-provider | `wallet-provider.ts` | React wallet context provider |
+| wallet-state | `wallet-state.ts` | `WalletStatus` type definition |
+| token-confirmation | `token-confirmation.ts` | Clarification choice parsing and formatting |
 
-- `Button`
-- `Card`
-- `Badge`
-- `Progress`
-- `Tooltip`
-- `EmptyState`
-
-## 4. 建议目录
+## 4. Actual Directory Structure
 
 ```text
-src/sidepanel/
+extension/src/sidepanel/
+├── index.tsx                   # Entry point
 ├── pages/
-│   └── SidePanelPage.tsx
+│   └── SidePanelPage.tsx       # Root page component
 ├── components/
-│   ├── shell/
-│   │   ├── AppShell.tsx
-│   │   └── HeaderBar.tsx
-│   ├── context/
-│   │   └── DetectionBar.tsx
-│   ├── chat/
-│   │   ├── ChatThread.tsx
-│   │   ├── MessageBubble.tsx
-│   │   └── Composer.tsx
-│   ├── action/
-│   │   ├── ActionCard.tsx
-│   │   ├── IntentSummaryCard.tsx
-│   │   └── ExecutionStatusBanner.tsx
-│   ├── risk/
-│   │   └── RiskIndicator.tsx
-│   └── primitives/
-│       ├── Button.tsx
-│       ├── Card.tsx
-│       └── Badge.tsx
-└── hooks/
-    ├── useSidePanelState.ts
-    ├── useIntentWorkflow.ts
-    └── useRiskScan.ts
+│   ├── ActionCard.tsx
+│   ├── DetectionBar.tsx
+│   ├── ExecutionProgress.tsx
+│   ├── IntentSummaryCard.tsx
+│   ├── RiskIndicator.tsx
+│   └── StrategyViz.tsx
+├── hooks/
+│   └── useSidePanelState.ts
+├── page-context.ts
+├── wallet-bridge.ts
+├── wallet-provider.ts
+├── wallet-state.ts
+├── token-confirmation.ts
+└── styles.css
 ```
 
-## 5. 状态管理建议
+## 5. State Management
 
-### 5.1 顶层状态
+The primary state management is via `useSidePanelState` hook:
 
-建议集中在 `useSidePanelState` 或轻量 store 中管理：
+- Subscribes to `workflow.state.changed` messages from the background
+- Manages: current phase, intent, risk report, execution preview, wallet status
+- Provides: confirm, cancel, retry actions
+- Does NOT derive workflow state independently — only renders and forwards user actions
 
-- 当前页面上下文
-- 最近一次 intent 请求
-- 风险扫描结果
-- 交易预览结果
-- 工作流状态机
+## 6. Background Module Inventory
 
-### 5.2 局部状态
+The background layer contains the orchestration and adapter modules:
 
-适合留在组件内部：
+| Module | File | Responsibility |
+|--------|------|---------------|
+| Message Router | `message-router.ts` | Central message dispatch hub |
+| Workflow Engine | `workflow-engine.ts` | State machine orchestration |
+| Intent Parser | `openai-intent-parser.ts` | LLM intent parsing via OpenAI |
+| Intent Parser Abstraction | `intent-parser.ts` | Parser interface |
+| Risk Adapter | `risk-adapter.ts` | Wasm + policy fallback risk evaluation |
+| Wasm Risk Engine | `wasm-risk-engine.ts` | Wasm loader and bridge |
+| Quote Adapter | `quote-adapter.ts` | Jupiter V2 quote integration |
+| Preview Adapter | `preview-adapter.ts` | Execution preview builder |
+| Simulation Adapter | `simulation-adapter.ts` | Transaction simulation |
+| Jito Adapter | `jito-adapter.ts` | Jito bundle submission |
+| Token Context Enricher | `token-context-enricher.ts` | On-chain token data enrichment |
+| Runtime Services | `runtime-services.ts` | Service factory (mock + production) |
+| Mock Services | `mock-services.ts` | Mock implementations for development |
+| Wasm Binary | `wasm/` | Compiled Wasm + JS/TS bindings |
 
-- 输入框文本
-- tooltip 开合
-- 卡片折叠展开
-- 局部 hover / loading 视觉状态
+## 7. Data Flow
 
-## 6. 组件契约建议
-
-### 6.1 ActionCard
-
-建议 props：
-
-```ts
-type ActionCardProps = {
-  routeLabel: string;
-  inputToken: { symbol: string; amount: string };
-  outputToken: { symbol: string; amount: string };
-  riskLevel: "low" | "medium" | "high" | "unknown";
-  blocked: boolean;
-  simulationSummary?: string;
-  status:
-    | "idle"
-    | "quoting"
-    | "simulating"
-    | "awaiting-signature"
-    | "submitting"
-    | "confirmed"
-    | "blocked"
-    | "failed";
-  onConfirm: () => void;
-  onCancel: () => void;
-};
 ```
-
-### 6.2 RiskIndicator
-
-建议 props：
-
-```ts
-type RiskIndicatorProps = {
-  score: number;
-  level: "low" | "medium" | "high" | "unknown";
-  checks: Array<{
-    label: string;
-    status: "pass" | "warn" | "fail";
-    detail: string;
-  }>;
-};
+Page DOM
+  → content/detect-context.ts (capture context)
+  → background/message-router.ts (dispatch)
+  → background/openai-intent-parser.ts (parse intent)
+  → SIPIntent
+  → background/token-context-enricher.ts (enrich on-chain data)
+  → background/risk-adapter.ts → wasm/scan_risk (risk check)
+  → SecurityReport
+  → background/quote-adapter.ts (Jupiter quote)
+  → ExecutionPreview
+  → sidepanel/ (render result, await user action)
+  → sidepanel/wallet-bridge.ts → contents/wallet-bridge.ts (sign transaction)
+  → background/jito-adapter.ts (submit bundle)
+  → Transaction result
 ```
-
-## 7. Hook 边界建议
-
-- `useIntentWorkflow`: 负责消费 Background 工作流状态，并将用户动作转成消息
-- `useRiskScan`: 封装 Wasm 初始化与调用
-- `useWalletState`: 负责连接状态与签名入口
-- `useDetectedContext`: 订阅 Background 广播的页面感知结果
-
-不要让展示组件自己调用 RPC、LLM 或 Wasm。
-
-补充约束：
-
-- 运行时主编排放在 `background/workflow-engine.ts`
-- `sidepanel/` 中的 hooks 只负责订阅、映射和触发消息，不维护第二套独立状态机
-- 组件状态命名应尽量与全局 workflow state 对齐，避免 `success/error/signing` 这类局部别名漂移
-
-## 8. 演进建议
-
-- 先把 Action Card 做成单实例，后续再扩展多卡片堆栈
-- 先用轻量状态管理，复杂后再考虑 Zustand 等方案
-- 保持业务类型定义与消息协议定义共享，避免前后重复声明

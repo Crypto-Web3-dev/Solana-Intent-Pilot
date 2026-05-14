@@ -1,17 +1,17 @@
-# SIP 消息类型定义
+# SIP Message Type Definitions
 
-## 1. 目标
+## 1. Goal
 
-本文件作为 `message-flow.md` 的配套类型清单，定义扩展内部主要消息的字段边界，方便直接转成 `shared/messages.ts`。
+This document serves as a companion type inventory to `message-flow.md`, defining the field boundaries of major messages within the extension, making it easy to directly convert into `shared/messages.ts`.
 
-## 2. 基础约束
+## 2. Basic Constraints
 
-- 所有消息必须可序列化
-- 所有跨上下文异步消息建议带 `requestId`
-- `type` 使用稳定字符串常量
-- `payload` 中不传递函数、类实例或复杂引用
+- All messages must be serializable
+- All cross-context async messages should include `requestId`
+- `type` uses stable string constants
+- `payload` must not contain functions, class instances, or complex references
 
-## 3. 基础类型
+## 3. Base Types
 
 ```ts
 export type WorkflowPhase =
@@ -58,7 +58,7 @@ export interface DetectedContextSnapshot {
 }
 ```
 
-## 4. 页面感知类消息
+## 4. Page Awareness Messages
 
 ```ts
 export interface ContextDetectedMessage {
@@ -75,7 +75,7 @@ export interface ContextClearedMessage {
 }
 ```
 
-## 5. Intent 工作流消息
+## 5. Intent Workflow Messages
 
 ```ts
 export interface IntentParseRequestedMessage {
@@ -107,7 +107,7 @@ export interface IntentParseFailedMessage {
 }
 ```
 
-## 6. 风险扫描消息
+## 6. Risk Scan Messages
 
 ```ts
 export interface RiskScanRequestedMessage {
@@ -128,7 +128,7 @@ export interface RiskScanCompletedMessage {
 }
 ```
 
-## 7. 执行预览消息
+## 7. Execution Preview Messages
 
 ```ts
 export interface ExecutionPreviewReadyMessage {
@@ -154,7 +154,7 @@ export interface ExecutionPreviewFailedMessage {
 }
 ```
 
-## 8. 交易提交消息
+## 8. Transaction Submission Messages
 
 ```ts
 export interface ExecutionConfirmedMessage {
@@ -198,20 +198,64 @@ export interface TransactionSettledMessage {
 }
 ```
 
-## 9. 工作流状态消息
+## 9. User Action Messages
+
+```ts
+export interface ExecutionCancelRequestedMessage {
+  type: "execution.cancel.requested";
+}
+
+export interface ExecutionRetryRequestedMessage {
+  type: "execution.retry.requested";
+}
+```
+
+## 10. Wallet Submission Messages
+
+```ts
+export interface WalletSubmissionRequestedMessage {
+  type: "wallet.submission.requested";
+  payload: {
+    requestId: string;
+    intent: SIPIntent;
+    preview: ExecutionPreview;
+  };
+}
+
+export interface WalletSubmissionCompletedMessage {
+  type: "wallet.submission.completed";
+  payload: {
+    requestId: string;
+    signature: string;
+  };
+}
+
+export interface WalletSubmissionFailedMessage {
+  type: "wallet.submission.failed";
+  payload: {
+    requestId: string;
+    error: string;
+  };
+}
+```
+
+## 11. Workflow State Messages
 
 ```ts
 export interface WorkflowStateChangedMessage {
   type: "workflow.state.changed";
   payload: {
-    requestId: string;
-    phase: WorkflowPhase;
-    reason?: WorkflowReason | string;
+    previous: WorkflowPhase;
+    current: WorkflowPhase;
+    reason?: WorkflowReason;
+    intent?: SIPIntent;
+    riskReport?: SecurityReport;
+    preview?: ExecutionPreview;
   };
 }
 ```
 
-## 10. 推荐联合类型
+## 12. Union Type
 
 ```ts
 export type SIPRuntimeMessage =
@@ -226,16 +270,28 @@ export type SIPRuntimeMessage =
   | ExecutionPreviewFailedMessage
   | ExecutionConfirmedMessage
   | ExecutionCancelledMessage
+  | ExecutionCancelRequestedMessage
+  | ExecutionRetryRequestedMessage
   | TransactionSubmittedMessage
   | TransactionFailedMessage
   | TransactionSettledMessage
+  | WalletSubmissionRequestedMessage
+  | WalletSubmissionCompletedMessage
+  | WalletSubmissionFailedMessage
   | WorkflowStateChangedMessage;
 ```
 
-## 11. 实现建议
+## 13. Internal Content Script Messages
 
-- 将 message 常量和类型放在同一文件
-- 为 `chrome.runtime.onMessage` 包一层类型安全 helper
-- 所有失败消息都提供 `reason`
-- 所有成功消息都优先返回可直接渲染的数据
-- `reason` 应尽量使用稳定枚举，避免 UI 依赖自由文本分支判断
+The content script (`detect-context.ts`) also listens for these trigger messages (not part of `SIPRuntimeMessage`):
+
+- `context.request_scan` — triggers context capture
+- `context.snapshot.requested` — triggers instant snapshot
+
+## 14. Implementation Recommendations
+
+- Place message constants and types in the same file
+- Wrap `chrome.runtime.onMessage` with a type-safe helper
+- All failure messages should provide `reason`
+- All success messages should prefer returning directly renderable data
+- `reason` should prefer stable enums over free-text to avoid UI relying on free-text branch logic

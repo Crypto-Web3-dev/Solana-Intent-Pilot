@@ -1,104 +1,105 @@
-# SIP 开发环境准备
+# SIP Development Setup
 
-## 1. 目标
+## 1. Purpose
 
-本文件定义 SIP 项目的最小开发环境要求，帮助后续实现时快速建立一致的本地工作环境。
+This document defines the minimum development environment requirements for the SIP project, helping to quickly establish a consistent local working environment for subsequent implementation.
 
-## 2. 基础依赖
+## 2. Base Dependencies
 
-建议安装以下工具：
+It is recommended to install the following tools:
 
 - Node.js 20+
-- pnpm 或 npm
+- pnpm or npm
 - Rust stable toolchain
 - `wasm-pack`
-- Chrome 或 Chromium
-- Phantom 钱包
+- Chrome or Chromium
+- Phantom Wallet
 
-如果要进行更稳定的 Solana 调试，建议额外准备：
+For more stable Solana debugging, it is recommended to additionally prepare:
 
 - Solana CLI
-- 一个主 RPC 和一个备用 RPC
-- 一个可用的 LLM API Key
+- A primary RPC and a fallback RPC
+- A working LLM API Key
 
-## 3. 推荐环境变量
+## 3. Recommended Environment Variables
 
-建议使用本地环境文件管理敏感配置：
+It is recommended to use a local environment file to manage sensitive configuration:
 
 ```bash
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.4-mini
+OPENAI_MODEL=gpt-4.1-mini
 HELIUS_API_KEY=
 QUICKNODE_RPC_URL=
 FALLBACK_RPC_URL=
 JUPITER_API_BASE=https://quote-api.jup.ag
+JUPITER_API_KEY=
 ```
 
-规则：
+Rules:
 
-- 不把真实密钥写进仓库文档或源码
-- 区分主节点和备用节点
-- 本地和演示环境尽量使用同一套 provider
+- Never commit real secrets to repository documentation or source code
+- Distinguish between primary and fallback nodes
+- Try to use the same set of providers for local and demo environments
 
-## 4. 本地开发流程
+## 4. Local Development Workflow
 
-### 4.1 扩展侧
+### 4.1 Extension Side
 
-建议流程：
+Recommended workflow:
 
-1. 启动扩展开发模式
-2. 在 Chrome 中加载 unpacked extension
-3. 打开 Side Panel 并验证基础 UI
-4. 检查 Content Script 是否能抓到页面上下文
+1. Start extension development mode
+2. Load the unpacked extension in Chrome
+3. Open the Side Panel and verify the base UI
+4. Check that the Content Script can capture page context
 
-### 4.2 Wasm 侧
+### 4.2 Wasm Side
 
-建议流程：
+Recommended workflow:
 
-1. 在 `core-engine/` 中编写 Rust 逻辑
-2. 使用 `wasm-pack` 构建 Wasm 产物
-3. 将输出接入扩展侧加载逻辑
-4. 验证最小风险扫描结果是否可返回
+1. Write Rust logic in `risk-engine/`
+2. Build Wasm artifacts using `wasm-pack`
+3. Connect the output to the extension side loading logic
+4. Verify that a minimum risk scan result can be returned
 
-### 4.3 服务侧
+### 4.3 Service Side
 
-建议流程：
+Recommended workflow:
 
-1. 接入 LLM 解析
-2. 用静态样例验证 JSON Intent 结构
-3. 接入 Jupiter 报价
-4. 验证模拟结果能被 UI 展示
+1. Integrate LLM parsing
+2. Verify JSON Intent structure with static samples
+3. Integrate Jupiter quoting
+4. Verify that simulation results can be displayed in the UI
 
-## 5. 最小联调检查
+## 5. Minimum Integration Check
 
-在正式实现前，建议先跑通以下最小链路：
+Before formal implementation, it is recommended to first run through the following minimum chain:
 
-- Side Panel 能渲染
-- Content Script 能发送 `context.detected`
-- LLM 能输出合法 `SIPIntent`
-- Wasm 能返回 `SecurityReport`
-- 报价结果能渲染成 Action Card
+- Side Panel can render
+- Content Script can send `context.detected`
+- LLM can output a valid `SIPIntent`
+- Wasm can return a `SecurityReport`
+- Quote results can render as an Action Card
 
-## 6. 开发规范建议
+## 6. Development Convention Suggestions
 
-- 共享类型优先放在 `shared/`
-- 所有消息类型先写文档再落代码
-- 任何外部调用都要有 timeout 和错误态
-- 先跑最小闭环，再扩展多协议和动画效果
+- Prefer placing shared types in `shared/`
+- Document all message types before writing code
+- Any external call must have a timeout and error state
+- Run the minimum end-to-end loop first, then expand to multi-protocol and animation effects
 
-## 7. 常见准备风险
+## 7. Common Setup Risks
 
-- Wasm 在 MV3 下加载受 CSP 影响
-- 公共 RPC 容易限流
-- LLM 输出不稳定时会卡住整个工作流
-- 钱包签名链路需要真实浏览器环境验证
+- Wasm loading under MV3 is affected by CSP
+- Public RPCs are prone to rate limiting
+- Unstable LLM output can stall the entire workflow
+- The wallet signing chain requires a real browser environment for verification
 
-## 8. 完成定义
+## 8. Definition of Done
 
-当以下条件满足时，可认为开发环境准备完成：
+The development environment can be considered ready when the following conditions are met:
 
-- 本地扩展可运行
-- 环境变量可被正确读取
-- Wasm 构建与加载链路可用
-- 主 RPC 与备用 RPC 可访问
-- 核心联调链路至少能跑通静态数据版本
+- The local extension can run
+- Environment variables are correctly read
+- Wasm build and loading chain is functional
+- Primary RPC and fallback RPC are accessible
+- The core integration chain can at least run through the static data version

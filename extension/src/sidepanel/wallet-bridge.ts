@@ -1,5 +1,6 @@
 import type { ExecutionPreview } from "../shared/execution";
 import type { SIPIntent } from "../shared/intent";
+import { isSupportedPageUrl } from "../shared/supported-pages";
 import type { WalletStatus } from "./wallet-state";
 
 export type SubmissionOutcome = "submitted" | "settled" | "failed" | "timeout";
@@ -34,8 +35,7 @@ function getChromeApi() {
 }
 
 function canInjectIntoUrl(url?: string) {
-  if (!url) return false;
-  return url.startsWith("http://") || url.startsWith("https://");
+  return isSupportedPageUrl(url);
 }
 
 type BrowserTab = {
@@ -124,7 +124,7 @@ export async function submitViaPageBridge(
 
   const tabs = await chromeApi.tabs.query({ currentWindow: true, active: true });
   const tab = findSignableTab(tabs, preferredTabId);
-  if (!tab?.id) throw new Error("Wallet signing is only available on normal web pages.");
+  if (!tab?.id) throw new Error("Wallet signing is only available on supported pages like Jupiter, pump.fun, X, DexScreener, Solscan, or Raydium.");
 
   console.log("[SIP Bridge] Directly calling wallet via executeScript...");
 

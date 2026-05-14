@@ -1,70 +1,70 @@
-# SIP QA 清单
+# SIP QA Checklist
 
-## 1. 目标
+## 1. Purpose
 
-本清单用于在实现阶段和演示前执行快速 QA，优先发现会直接影响 Demo 和核心体验的问题。
+This checklist is used for quick QA during the implementation phase and before demos, prioritizing issues that directly affect the demo and core experience.
 
-## 2. 页面感知检查
+## 2. Page Awareness Checks
 
-- [ ] 打开目标页面后能触发上下文检测
-- [ ] 页面切换后旧上下文不会残留
-- [ ] 识别出的 token 或地址不会重复刷屏
-- [ ] 无有效线索时 UI 展示空态而不是脏数据
+- [ ] Opening a target page triggers context detection
+- [ ] Old context does not persist after switching pages
+- [ ] Identified tokens or addresses do not flood the display with duplicates
+- [ ] When no valid clues are found, the UI shows an empty state instead of stale data
 
-## 3. Intent 解析检查
+## 3. Intent Parsing Checks
 
-- [ ] 输入典型自然语言时能得到合法 Intent
-- [ ] 低置信度结果有明确提示
-- [ ] 解析失败时不会让 UI 卡死
-- [ ] UI 不直接展示原始 JSON 给普通用户
+- [ ] Inputting typical natural language produces a valid Intent
+- [ ] Low-confidence results have clear prompts
+- [ ] Parse failures do not cause the UI to freeze
+- [ ] The UI does not display raw JSON directly to regular users
 
-## 4. 风险扫描检查
+## 4. Risk Scanning Checks
 
-- [ ] 风险扫描开始时有加载态
-- [ ] 风险扫描完成后有等级和原因
-- [ ] 高风险会阻断主 CTA
-- [ ] 缺失数据时显示 `unknown` 或明确说明
+- [ ] There is a loading state when risk scanning starts
+- [ ] Risk scanning completion shows severity level and reason
+- [ ] High risk blocks the primary CTA
+- [ ] Missing data displays `unknown` or a clear explanation
 
-## 5. 报价与模拟检查
+## 5. Quote and Simulation Checks
 
-- [ ] 报价成功时 Action Card 数据完整
-- [ ] 报价失败时有清晰错误提示
-- [ ] 模拟失败不会误显示为成功
-- [ ] 滑点、费用和输入输出资产展示一致
+- [ ] Action Card data is complete when quoting succeeds
+- [ ] Clear error prompt when quoting fails
+- [ ] Simulation failure is not mistakenly displayed as success
+- [ ] Slippage, fees, and input/output assets are displayed consistently
 
-## 6. 钱包与执行检查
+## 6. Wallet and Execution Checks
 
-- [ ] 点击确认后会唤起钱包
-- [ ] 用户取消签名时状态能恢复
-- [ ] 提交中和已确认状态能正确切换
-- [ ] 成功后可看到交易签名或 Explorer 链接
+- [ ] Clicking confirm invokes the wallet
+- [ ] User cancellation of signing restores the state
+- [ ] Submitting and confirmed states transition correctly
+- [ ] After success, the transaction signature or Explorer link is visible
 
-## 7. UI 与交互检查
+## 7. UI and Interaction Checks
 
-- [ ] Header、Detection Bar、ChatThread、Action Card 层次清晰
-- [ ] 加载态、失败态、阻断态、成功态易区分
-- [ ] 颜色不会把风险状态表达反了
-- [ ] 窄侧边栏下内容不溢出
+- [ ] Header, Detection Bar, ChatThread, and Action Card hierarchy is clear
+- [ ] Loading, failure, blocking, and success states are easily distinguishable
+- [ ] Colors do not convey risk status incorrectly
+- [ ] Content does not overflow in narrow sidebars
 
-## 8. 安全表达检查
+## 8. Security Expression Checks
 
-- [ ] AI 文案不会伪装成安全结论
-- [ ] 高风险提示包含具体原因
-- [ ] 签名前页面有清楚的交易摘要
-- [ ] 未经用户确认不会进入交易发送
+- [ ] AI copy does not masquerade as a safety conclusion
+- [ ] High-risk alerts include specific reasons
+- [ ] Pre-sign page has a clear transaction summary
+- [ ] Transaction sending does not proceed without user confirmation
 
-## 9. 演示前检查
+## 9. Pre-Demo Checks
 
-- [ ] 选择好稳定的目标网页
-- [ ] 准备好成功交易示例
-- [ ] 准备好风险阻断示例
-- [ ] 检查 RPC、钱包和 API Key 都可用
-- [ ] 预热扩展和侧边栏，减少首轮加载抖动
+- [ ] Stable target web page is selected
+- [ ] Successful transaction example is prepared
+- [ ] Risk blocking example is prepared
+- [ ] RPC, wallet, and API Key are all accessible
+- [ ] Extension and sidebar are pre-warmed to reduce first-load jitter
 
-## 10. 建议执行顺序
+## 10. Suggested Execution Order
 
-1. 先检查页面感知和 Intent 解析
-2. 再检查风险扫描与交易预览
-3. 最后检查真钱包签名与演示路径
+1. Check page awareness and Intent parsing first
+2. Then check risk scanning and transaction preview
+3. Finally check real wallet signing and demo paths
 
-如果时间很紧，优先保住成功路径、风险阻断路径和加载失败提示。
+If time is very tight, prioritize the success path, risk blocking path, and loading/failure prompts.

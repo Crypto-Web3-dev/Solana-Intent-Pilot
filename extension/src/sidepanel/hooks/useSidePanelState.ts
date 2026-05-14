@@ -74,13 +74,16 @@ function createRequestId(sequence: number) {
 
 type SidePanelMessageRouter = any;
 
+const SUPPORTED_PAGE_MESSAGE =
+  "Open a supported page like Jupiter, pump.fun, X, DexScreener, Solscan, or Raydium before submitting.";
+
 export function useSidePanelState(
   messageRouter: SidePanelMessageRouter = router
 ) {
   const requestSequence = useRef(1);
   const requestTracker = useRef(createRequestTracker());
   const requestIdRef = useRef<string | null>(null);
-  
+
   const [requestId, setRequestId] = useState<string | null>(null);
   const [pageTabId, setPageTabId] = useState<number | null>(null);
   const [phase, setPhase] = useState<WorkflowPhase>("idle");
@@ -140,7 +143,6 @@ export function useSidePanelState(
     }
   }
 
-  // 核心优化：实时监听来自后台的推送事件
   useEffect(() => {
     if (isTest) return;
 
@@ -149,7 +151,6 @@ export function useSidePanelState(
       _sender: chrome.runtime.MessageSender,
       sendResponse: (response?: any) => void
     ) => {
-      // 所有的工作流消息如果带有 requestId，应当匹配当前请求
       if ("payload" in message && "requestId" in message.payload) {
         if (message.payload.requestId === requestIdRef.current) {
           applyEvents([message]);
@@ -173,9 +174,7 @@ export function useSidePanelState(
     if (!pageContext) {
       setPhase("blocked");
       setReason("unsupported-page");
-      setErrorMessage(
-        "A normal webpage is required before SIP can parse the current context."
-      );
+      setErrorMessage(SUPPORTED_PAGE_MESSAGE);
       setWalletStatus("unsupported-page");
       return;
     }
@@ -191,21 +190,22 @@ export function useSidePanelState(
       return;
     }
 
-    // 发送请求，不再阻塞等待最终结果，UI 将通过监听器获得实时更新
-    void (messageRouter as any).handleIntentRequest({
-      type: "intent.parse.requested",
-      payload: {
-        requestId: nextRequestId,
-        tabId: pageContext.tabId,
-        userInput,
-        contextSnapshot: pageContext,
-        userPublicKey: wallet.address
-      }
-    }).then((events: any) => {
-        if (requestTracker.current.isCurrent(requestToken)) {
-            applyEvents(events || []);
+    void (messageRouter as any)
+      .handleIntentRequest({
+        type: "intent.parse.requested",
+        payload: {
+          requestId: nextRequestId,
+          tabId: pageContext.tabId,
+          userInput,
+          contextSnapshot: pageContext,
+          userPublicKey: wallet.address
         }
-    });
+      })
+      .then((events: any) => {
+        if (requestTracker.current.isCurrent(requestToken)) {
+          applyEvents(events || []);
+        }
+      });
 
     if (!requestTracker.current.isCurrent(requestToken)) {
       return;
@@ -269,7 +269,12 @@ export function useSidePanelState(
         }
 
         try {
-          const submission = await submitWithLifecycle(requestId, currentIntent, currentPreview, pageTabId ?? undefined);
+          const submission = await submitWithLifecycle(
+            requestId,
+            currentIntent,
+            currentPreview,
+            pageTabId ?? undefined
+          );
           if (submission.outcome === "settled" && submission.signature) {
             setWalletStatus("submitted");
             try {
@@ -277,31 +282,63 @@ export function useSidePanelState(
                 type: "transaction.submitted",
                 payload: { requestId, signature: submission.signature }
               });
-            } catch (err) { console.error("Jupiter sync failed:", err); }
+            } catch (err) {
+              console.error("Jupiter sync failed:", err);
+            }
 
-            applyEvents(await (messageRouter as any).handleTransactionSettled({
-              type: "transaction.settled",
-              payload: { requestId, signature: submission.signature, settledAt: new Date().toISOString(), explorerUrl: submission.explorerUrl }
-            }));
+            applyEvents(
+              await (messageRouter as any).handleTransactionSettled({
+                type: "transaction.settled",
+                payload: {
+                  requestId,
+                  signature: submission.signature,
+                  settledAt: new Date().toISOString(),
+                  explorerUrl: submission.explorerUrl
+                }
+              })
+            );
             setIsSigning(false);
             return;
           }
 
-          const failureReason = submission.error || (submission.outcome === "timeout" ? "Timed out" : "Wallet failed");
-          applyEvents(await (messageRouter as any).handleTransactionFailed({
-            type: "transaction.failed",
-            payload: { requestId, reason: failureReason }
-          }));
+          const failureReason =
+            submission.error ||
+            (submission.outcome === "timeout" ? "Timed out" : "Wallet failed");
+          applyEvents(
+            await (messageRouter as any).handleTransactionFailed({
+              type: "transaction.failed",
+              payload: { requestId, reason: failureReason }
+            })
+          );
           setErrorMessage(failureReason);
           setWalletStatus("failed");
           setIsSigning(false);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Failed";
-          const isBlocked = message.includes("normal web pages");
-          if (isBlocked) { setPhase("blocked"); setReason("unsupported-page"); }
-          else { applyEvents(await (messageRouter as any).handleTransactionFailed({ type: "transaction.failed", payload: { requestId, reason: message } })); }
-          setErrorMessage(message);
-          setWalletStatus(message.includes("Wallet provider") ? "provider-missing" : isBlocked ? "unsupported-page" : "failed");
+          const isBlocked =
+            message.includes("supported pages") ||
+            message.includes("supported page") ||
+            message.includes("Jupiter, pump.fun, X, DexScreener, Solscan, or Raydium");
+          if (isBlocked) {
+            setPhase("blocked");
+            setReason("unsupported-page");
+            setErrorMessage(SUPPORTED_PAGE_MESSAGE);
+          } else {
+            applyEvents(
+              await (messageRouter as any).handleTransactionFailed({
+                type: "transaction.failed",
+                payload: { requestId, reason: message }
+              })
+            );
+            setErrorMessage(message);
+          }
+          setWalletStatus(
+            message.includes("Wallet provider")
+              ? "provider-missing"
+              : isBlocked
+                ? "unsupported-page"
+                : "failed"
+          );
           setIsSigning(false);
         }
       });
@@ -310,59 +347,90 @@ export function useSidePanelState(
   function retrySignature() {
     if (!requestId) return;
     setErrorMessage(null);
-    void (messageRouter as any).handleRetryRequested({
+    void (messageRouter as any)
+      .handleRetryRequested({
         type: "execution.retry_requested",
         payload: { requestId }
-    }).then((events: any) => {
+      })
+      .then((events: any) => {
         applyEvents(events || []);
-        confirmSignature(); // 直接再次触发签名
-    });
+        confirmSignature();
+      });
   }
 
   function cancelSignature() {
-    // 无论是签名中途取消，还是失败后点击“Reset”，都应当提供一个彻底重置回初始状态的路径
     cancelProcessing();
   }
 
   function failSubmission() {
     if (!requestId) return;
-    void (messageRouter as any).handleTransactionFailed({ type: "transaction.failed", payload: { requestId, reason: "Mock failed" } }).then((events: any) => {
-      applyEvents(events || []);
-      setWalletStatus("failed");
-      setIsSigning(false);
-    });
+    void (messageRouter as any)
+      .handleTransactionFailed({
+        type: "transaction.failed",
+        payload: { requestId, reason: "Mock failed" }
+      })
+      .then((events: any) => {
+        applyEvents(events || []);
+        setWalletStatus("failed");
+        setIsSigning(false);
+      });
   }
 
   function settleTransaction() {
     if (!requestId) return;
-    void (messageRouter as any).handleTransactionSettled({ type: "transaction.settled", payload: { requestId, signature: "mock-signature", settledAt: new Date().toISOString() } }).then((events: any) => {
-      applyEvents(events || []);
-      setIsSigning(false);
-    });
+    void (messageRouter as any)
+      .handleTransactionSettled({
+        type: "transaction.settled",
+        payload: {
+          requestId,
+          signature: "mock-signature",
+          settledAt: new Date().toISOString()
+        }
+      })
+      .then((events: any) => {
+        applyEvents(events || []);
+        setIsSigning(false);
+      });
   }
 
   function cancelProcessing() {
     if (requestId) {
-        // 通知后台取消当前请求
-        void chrome.runtime.sendMessage({
-            type: "execution.cancel_requested",
-            payload: { requestId }
-        });
+      void chrome.runtime.sendMessage({
+        type: "execution.cancel_requested",
+        payload: { requestId }
+      });
     }
 
-    requestTracker.current.next(); // Invalidates any in-flight requests
+    requestTracker.current.next();
     const nextRequestId = createRequestId(requestSequence.current);
     requestSequence.current += 1;
     resetTransientState(nextRequestId);
   }
 
   function openNormalPage() {
-    if (typeof window !== "undefined") window.open("https://example.com", "_blank", "noopener,noreferrer");
+    if (typeof window !== "undefined")
+      window.open("https://jup.ag", "_blank", "noopener,noreferrer");
   }
 
   return {
-    requestId, pageTabId, phase, reason, intent, clarification, risk, preview, errorMessage, walletStatus, isSigning,
-    submit, confirmSignature, cancelSignature, failSubmission, settleTransaction, openNormalPage, cancelProcessing,
+    requestId,
+    pageTabId,
+    phase,
+    reason,
+    intent,
+    clarification,
+    risk,
+    preview,
+    errorMessage,
+    walletStatus,
+    isSigning,
+    submit,
+    confirmSignature,
+    cancelSignature,
+    failSubmission,
+    settleTransaction,
+    openNormalPage,
+    cancelProcessing,
     retrySignature
   };
 }

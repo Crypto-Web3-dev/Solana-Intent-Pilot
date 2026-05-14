@@ -1,24 +1,24 @@
-# SIP 运行时顺序图
+# SIP Runtime Sequence
 
-## 1. 目标
+## 1. Goal
 
-本文件描述 SIP 在一次典型用户操作中的运行时顺序，帮助实现时统一：
+This document describes the runtime sequence of SIP during a typical user operation, helping to unify during implementation:
 
-- 谁先触发谁
-- 哪些步骤是同步感知，哪些是异步编排
-- 哪些阶段必须等待结果，哪些可以并行
+- Who triggers whom first
+- Which steps are synchronous perception, and which are asynchronous orchestration
+- Which phases must wait for results, and which can proceed in parallel
 
 ## 2. Happy Path
 
-以下是一次标准 `detect -> parse -> scan -> quote -> simulate -> sign -> submit` 流程：
+The following is a standard `detect -> parse -> scan -> quote -> simulate -> sign -> submit` flow:
 
 ```text
 User
-  -> Side Panel: 输入 "买 1 SOL 的这个币"
+  -> Side Panel: Enter "buy 1 SOL of this token"
 Side Panel
   -> Background: intent.parse.requested
 Background
-  -> Context Store: 读取当前 tab 的 context snapshot
+  -> Context Store: Read current tab's context snapshot
 Background
   -> LLM Service: parse intent
 LLM Service
@@ -30,7 +30,7 @@ Background
 RPC Provider
   -> Background: mint account data
 Background
-  -> Wasm Engine: analyze mint data
+  -> Wasm Engine: scan_risk(intent_json)
 Wasm Engine
   -> Background: SecurityReport
 Background
@@ -46,7 +46,7 @@ RPC Provider
 Background
   -> Side Panel: execution.preview.ready
 User
-  -> Side Panel: 点击确认
+  -> Side Panel: Click confirm
 Side Panel
   -> Background: execution.confirmed
 Background
@@ -61,131 +61,131 @@ Background
   -> Side Panel: workflow.state.changed(confirmed)
 ```
 
-## 3. 阶段划分
+## 3. Phase Breakdown
 
-### 3.1 感知阶段
+### 3.1 Perception Phase
 
-触发条件：
+Trigger conditions:
 
-- 页面加载
-- DOM 变化
-- 用户选中文本
+- Page load
+- DOM change
+- User text selection
 
-输出：
+Output:
 
 - `DetectedContextSnapshot`
 
-特点：
+Characteristics:
 
-- 可持续后台更新
-- 不依赖用户明确触发
+- Can continuously update in the background
+- Does not depend on explicit user triggering
 
-### 3.2 解析阶段
+### 3.2 Parsing Phase
 
-触发条件：
+Trigger conditions:
 
-- 用户提交自然语言输入
+- User submits natural language input
 
-输出：
+Output:
 
 - `SIPIntent`
 
-特点：
+Characteristics:
 
-- 必须带 `requestId`
-- 必须经过 schema 校验
+- Must carry `requestId`
+- Must pass schema validation
 
-### 3.3 风控阶段
+### 3.3 Risk Control Phase
 
-触发条件：
+Trigger conditions:
 
 - `requiresRiskScan = true`
 
-输出：
+Output:
 
 - `SecurityReport`
 
-特点：
+Characteristics:
 
-- 默认串行阻塞后续执行预览
-- 后续可优化为 quote 与部分 scan 并行，但最终展示前必须会合
+- Default is serial, blocking subsequent execution preview
+- Can later be optimized to run quote and partial scan in parallel, but must rendezvous before final display
 
-### 3.4 预览阶段
+### 3.4 Preview Phase
 
-触发条件：
+Trigger conditions:
 
-- 风险未阻断
+- Risk not blocked
 
-输出：
+Output:
 
-- 报价结果
-- 模拟结果
+- Quote result
+- Simulation result
 - Action Card
 
-### 3.5 执行阶段
+### 3.5 Execution Phase
 
-触发条件：
+Trigger conditions:
 
-- 用户确认
+- User confirmation
 
-输出：
+Output:
 
-- 钱包签名
-- 链上提交结果
-- 成功或失败状态
+- Wallet signature
+- On-chain submission result
+- Success or failure status
 
-## 4. 并行与串行建议
+## 4. Parallel and Serial Recommendations
 
-推荐串行：
+Recommended serial:
 
 - `parse -> validate`
 - `risk -> block/allow`
 - `sign -> submit`
 
-可并行优化：
+Can be parallelized for optimization:
 
-- 获取 mint data 与获取 quote
-- 获取 token metadata 与风险结果渲染准备
+- Fetching mint data and fetching quote
+- Fetching token metadata and preparing risk result rendering
 
-但任何并行优化都不能跳过以下门槛：
+However, no parallel optimization can skip the following gates:
 
-- intent 校验通过
-- 风险检查完成或明确标记可跳过
-- 用户最终确认
+- Intent validation passed
+- Risk check completed or explicitly marked as skippable
+- User final confirmation
 
-## 5. 异常路径
+## 5. Exception Paths
 
-### 5.1 LLM 输出无效
+### 5.1 Invalid LLM Output
 
-- Background 标记 `failed`
-- Side Panel 展示“未能解析成可执行意图”
-- 保留用户输入，允许重新提交
+- Background marks `failed`
+- Side Panel displays "Could not parse as executable intent"
+- Preserve user input, allow re-submission
 
-### 5.2 需要澄清
+### 5.2 Needs Clarification
 
-- Intent 结构合法，但 `needsClarification = true`
-- Background 不进入报价、模拟和签名链
-- Side Panel 提示用户确认目标资产、金额或条件后重新提交
+- Intent structure is valid, but `needsClarification = true`
+- Background does not enter the quote, simulation, and signature chain
+- Side Panel prompts user to confirm target asset, amount, or condition before re-submitting
 
-### 5.3 风险阻断
+### 5.3 Risk Block
 
-- Background 标记 `blocked`
-- Side Panel 显示高风险说明
-- 不进入签名流程
+- Background marks `blocked`
+- Side Panel displays high-risk explanation
+- Does not enter signature flow
 
-### 5.4 报价或模拟失败
+### 5.4 Quote or Simulation Failure
 
-- 保留 intent 和风险结果
-- 显示 `quote unavailable` 或 `simulation failed`
-- 允许用户重试或切换节点
+- Preserve intent and risk results
+- Display `quote unavailable` or `simulation failed`
+- Allow user to retry or switch nodes
 
-### 5.5 用户取消签名
+### 5.5 User Cancels Signature
 
-- 工作流回到 `idle` 或 `ready`
-- 保留最近预览卡片供再次发起
+- Workflow returns to `idle` or `ready`
+- Preserve most recent preview card for re-initiation
 
-## 6. 实现提醒
+## 6. Implementation Reminders
 
-- 所有阶段事件都应写入统一 workflow state
-- 每个外部调用都应附带超时和错误原因
-- UI 不要自己拼时序，应只渲染状态机和结果对象
+- All phase events should be written to the unified workflow state
+- Every external call should include a timeout and error reason
+- UI should not assemble its own timing; it should only render the state machine and result objects

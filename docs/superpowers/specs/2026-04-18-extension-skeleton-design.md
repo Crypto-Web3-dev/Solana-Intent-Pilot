@@ -2,79 +2,79 @@
 
 ## Goal
 
-在当前纯文档仓库的基础上，落出一套可运行的 Chrome extension 最小骨架，覆盖：
+On top of the current documentation-only repository, produce a runnable Chrome extension minimum skeleton covering:
 
-- `shared` 运行时类型
-- `background` 工作流编排骨架
-- `sidepanel` 基础 UI
-- `content` 最小上下文检测入口
-- 全 mock 的 parse -> risk -> preview 纵向闭环
+- `shared` runtime types
+- `background` workflow orchestration skeleton
+- `sidepanel` basic UI
+- `content` minimal context detection entry point
+- A fully mocked parse -> risk -> preview vertical closed loop
 
-本设计的目标不是接通真实链路，而是验证当前 `docs/` 中定义的架构、状态机和运行时契约是否真的适合实现。
+The goal of this design is not to connect to real services, but to verify whether the architecture, state machine, and runtime contracts defined in the current `docs/` are truly suitable for implementation.
 
 ## Scope
 
-本轮实现包含：
+This round of implementation includes:
 
-- 新建 `extension/` 代码骨架
-- 将文档中的核心契约落成 `shared` 类型文件
-- 建立 `background/workflow-engine.ts` 和消息路由骨架
-- 建立 `sidepanel` 页面、状态订阅 hook 和最小展示组件
-- 建立 `content/detect-context.ts` 的最小消息发送能力
-- 用本地 mock 服务跑通 `intent.parse.requested -> workflow.state.changed -> execution.preview.ready`
-- 为 `workflow-engine` 和关键类型写最小测试
+- Creating a new `extension/` code skeleton
+- Landing core contracts from documentation into `shared` type files
+- Setting up `background/workflow-engine.ts` and message routing skeleton
+- Setting up `sidepanel` page, state subscription hook, and minimal display components
+- Setting up `content/detect-context.ts` with minimal message sending capability
+- Running through `intent.parse.requested -> workflow.state.changed -> execution.preview.ready` using local mock services
+- Writing minimal tests for `workflow-engine` and key types
 
-本轮不包含：
+This round does not include:
 
-- 真实 LLM 接入
-- 真实 Jupiter / RPC 接入
-- 真实 Wasm 风险扫描
-- 真实钱包签名
-- 生产级视觉打磨
+- Real LLM integration
+- Real Jupiter / RPC integration
+- Real Wasm risk scanning
+- Real wallet signing
+- Production-grade visual polish
 
 ## Why This Slice
 
-当前仓库尚无实现代码，直接接真实链路会把“脚手架搭建”和“外部集成调试”混在一起，风险过高。
+The current repository has no implementation code yet. Connecting to real services directly would mix "scaffolding setup" with "external integration debugging," which carries too much risk.
 
-先做全 mock 纵向切片的价值是：
+The value of doing a fully mocked vertical slice first is:
 
-- 最快验证文档里的边界是否合理
-- 先把 `shared -> background -> sidepanel` 的关系钉死
-- 让后续真实服务接入变成替换 mock，而不是边搭边改结构
-- 让测试优先覆盖状态机和契约，而不是被外部依赖拖住
+- Fastest validation of whether the boundaries in the documentation are reasonable
+- Pin down the `shared -> background -> sidepanel` relationship first
+- Make subsequent real service integration a matter of replacing mocks, rather than building and restructuring simultaneously
+- Let tests prioritize covering the state machine and contracts, instead of being held back by external dependencies
 
 ## Architecture
 
 ### Runtime ownership
 
-- `Background` 是唯一主编排层
-- `Side Panel` 只负责渲染状态、发送用户动作
-- `Content Script` 只负责发送页面上下文线索
-- mock 服务只返回稳定对象，不参与 UI 推导
+- `Background` is the sole orchestration layer
+- `Side Panel` is only responsible for rendering state and sending user actions
+- `Content Script` is only responsible for sending page context clues
+- Mock services only return stable objects and do not participate in UI derivation
 
 ### Vertical flow
 
-第一轮跑通的最小流程：
+The minimum flow to run through in the first round:
 
-1. `content` 发送 `context.detected`
-2. `sidepanel` 提交 `intent.parse.requested`
-3. `background` 调用 mock parse 服务
-4. `background` 根据返回结果推进 workflow state
-5. `background` 调用 mock risk 服务
-6. `background` 调用 mock preview 服务
-7. `sidepanel` 订阅状态和结果并渲染
+1. `content` sends `context.detected`
+2. `sidepanel` submits `intent.parse.requested`
+3. `background` calls mock parse service
+4. `background` advances workflow state based on the returned result
+5. `background` calls mock risk service
+6. `background` calls mock preview service
+7. `sidepanel` subscribes to state and results and renders them
 
 ### Key invariants
 
-- `needsClarification` 回到 `idle`，不进入 `blocked`
-- `unknown` 是风险标签，不是 workflow phase
-- `blocked` 与 `failed` 必须可区分
-- 所有跨上下文消息都带 `requestId`
-- 所有 UI 消费对象都优先来自 `shared` 稳定类型
+- `needsClarification` returns to `idle`, does not enter `blocked`
+- `unknown` is a risk label, not a workflow phase
+- `blocked` and `failed` must be distinguishable
+- All cross-context messages carry a `requestId`
+- All UI consumption objects come first from `shared` stable types
 
 ## File structure
 
-建议首轮创建如下结构：
+Recommended structure for the first round:
 
 ```text
 extension/
@@ -113,177 +113,177 @@ extension/
 
 ### `shared/`
 
-责任：
+Responsibilities:
 
-- 承载单一事实来源的类型和消息契约
-- 不依赖 React、Chrome API 或具体运行时实现
+- Carry the single source of truth for types and message contracts
+- No dependency on React, Chrome API, or specific runtime implementations
 
-要求：
+Requirements:
 
-- 直接对齐 `docs/api/runtime-contracts.md`
-- 不在 UI 层重复定义近似类型
+- Directly align with `docs/api/runtime-contracts.md`
+- Do not redefine approximate types in the UI layer
 
 ### `background/workflow-engine.ts`
 
-责任：
+Responsibilities:
 
-- 维护单请求工作流状态
-- 接收 parse / risk / preview 结果并推进状态
-- 产出 `workflow.state.changed`
+- Maintain per-request workflow state
+- Receive parse / risk / preview results and advance state
+- Produce `workflow.state.changed`
 
-要求：
+Requirements:
 
-- 对齐 `docs/architecture/workflow-state-machine.md`
-- 不混入 UI 文案
-- 优先使用纯函数和小接口，便于测试
+- Align with `docs/architecture/workflow-state-machine.md`
+- Do not mix in UI copy
+- Prefer pure functions and small interfaces for testability
 
 ### `background/mock-services.ts`
 
-责任：
+Responsibilities:
 
-- 返回稳定的 mock intent、mock risk、mock preview
+- Return stable mock intent, mock risk, mock preview
 
-要求：
+Requirements:
 
-- 返回值必须符合 `shared` 类型
-- 至少覆盖 3 条路径：
+- Return values must conform to `shared` types
+- Cover at least 3 paths:
   - happy path
   - `needsClarification`
   - `blocked`
 
 ### `background/message-router.ts`
 
-责任：
+Responsibilities:
 
-- 接收来自 content / sidepanel 的消息
-- 调用 workflow engine 和 mock services
-- 广播更新后的状态与结果
+- Receive messages from content / sidepanel
+- Call workflow engine and mock services
+- Broadcast updated state and results
 
 ### `content/detect-context.ts`
 
-责任：
+Responsibilities:
 
-- 发送一份最小 `DetectedContextSnapshot`
+- Send a minimal `DetectedContextSnapshot`
 
-要求：
+Requirements:
 
-- 首轮可以使用静态或半静态数据
-- 不在本轮实现复杂 DOM 平台适配
+- Static or semi-static data is acceptable for the first round
+- Complex DOM platform adaptation is not implemented in this round
 
 ### `sidepanel`
 
-责任：
+Responsibilities:
 
-- 展示 workflow state、intent 摘要、风险信息和预览信息
-- 提供输入框与触发动作
+- Display workflow state, intent summary, risk information, and preview information
+- Provide input fields and trigger actions
 
-要求：
+Requirements:
 
-- 不自己推导 workflow phase
-- UI 先追求语义正确，不追求最终视觉
+- Do not derive workflow phase on your own
+- UI should aim for semantic correctness first, not final visuals
 
 ## Data flow
 
 ### Happy path
 
-1. 用户输入命令
-2. `sidepanel` 发送 `intent.parse.requested`
-3. `background` 进入 `parsing`
-4. mock parse 返回合法 `SIPIntent`
-5. `background` 进入 `risk-checking`
-6. mock risk 返回 `low` 或 `medium`
-7. `background` 进入 `quoting -> simulating`
-8. mock preview 返回 `ExecutionPreview`
-9. `background` 进入 `awaiting-signature`
-10. `sidepanel` 显示完整卡片
+1. User enters a command
+2. `sidepanel` sends `intent.parse.requested`
+3. `background` enters `parsing`
+4. Mock parse returns a valid `SIPIntent`
+5. `background` enters `risk-checking`
+6. Mock risk returns `low` or `medium`
+7. `background` enters `quoting -> simulating`
+8. Mock preview returns `ExecutionPreview`
+9. `background` enters `awaiting-signature`
+10. `sidepanel` displays the complete card
 
 ### Clarification path
 
-1. mock parse 返回 `needsClarification = true`
-2. `background` 回到 `idle`
-3. `sidepanel` 保留摘要并提示用户补充信息
+1. Mock parse returns `needsClarification = true`
+2. `background` returns to `idle`
+3. `sidepanel` retains the summary and prompts the user for additional information
 
 ### Blocked path
 
-1. mock risk 返回 `blocking = true`
-2. `background` 进入 `blocked`
-3. `sidepanel` 显示阻断原因并禁用主 CTA
+1. Mock risk returns `blocking = true`
+2. `background` enters `blocked`
+3. `sidepanel` displays the blocking reason and disables the main CTA
 
 ## Error handling
 
-第一轮至少支持以下错误分支：
+The first round must support at least the following error branches:
 
-- parse 返回结构非法 -> `failed`
-- preview mock 主动抛错 -> `failed`
-- 用户取消或重置 -> 回到 `idle`
+- Parse returns an invalid structure -> `failed`
+- Preview mock proactively throws an error -> `failed`
+- User cancels or resets -> return to `idle`
 
-要求：
+Requirements:
 
-- `failed` 和 `blocked` 视觉区分
-- 错误原因由 `background` 提供，不由组件自行猜测
+- `failed` and `blocked` must be visually distinguishable
+- Error reasons are provided by `background`, not guessed by components
 
 ## Testing strategy
 
-本轮采用最小 TDD：
+This round adopts minimal TDD:
 
 ### `shared`
 
-- 校验关键类型导出是否存在
-- 校验消息联合类型可覆盖核心消息
+- Verify that key type exports exist
+- Verify that message union types can cover core messages
 
 ### `workflow-engine`
 
-- happy path 从 `parsing` 进入 `awaiting-signature`
-- `needsClarification` 从 `parsing` 回到 `idle`
-- `blocking = true` 从 `risk-checking` 进入 `blocked`
-- preview 失败时进入 `failed`
+- Happy path goes from `parsing` to `awaiting-signature`
+- `needsClarification` goes from `parsing` back to `idle`
+- `blocking = true` goes from `risk-checking` to `blocked`
+- Preview failure enters `failed`
 
 ### UI
 
-本轮只做轻量测试或最小渲染断言，重点先保证：
+This round only does lightweight testing or minimal render assertions, focusing on ensuring:
 
-- `unknown` 不显示为成功
-- `blocked` 与 `failed` 可区分
+- `unknown` is not displayed as success
+- `blocked` and `failed` are distinguishable
 
 ## Success criteria
 
-当以下条件满足时，视为本轮完成：
+This round is considered complete when the following conditions are met:
 
-- `extension/` 骨架可安装或至少可构建
-- `shared` 类型与文档契约一致
-- mock 工作流能驱动 `sidepanel` 展示 3 条路径
-- 状态机关键测试通过
-- 没有把真实链路和骨架搭建耦合在一起
+- The `extension/` skeleton can be installed or at least built
+- `shared` types are consistent with the documentation contracts
+- The mock workflow can drive `sidepanel` to display 3 paths
+- Key state machine tests pass
+- Real services are not coupled with scaffolding setup
 
 ## Risks
 
-### Risk 1: 工程脚手架细节过早分散注意力
+### Risk 1: Engineering scaffolding details distract attention too early
 
-缓解：
+Mitigation:
 
-- 先保证目录、类型、消息和状态机正确
-- 尽量少引入额外依赖
+- Ensure directory structure, types, messages, and state machine are correct first
+- Minimize additional dependencies
 
-### Risk 2: UI 先写太多，反而把状态边界写乱
+### Risk 2: Writing too much UI first can mess up state boundaries
 
-缓解：
+Mitigation:
 
-- 先让 `background` 产出稳定对象
-- `sidepanel` 只做订阅和渲染
+- Let `background` produce stable objects first
+- `sidepanel` only does subscription and rendering
 
-### Risk 3: mock 数据与真实链路差距过大
+### Risk 3: Mock data diverges too far from real services
 
-缓解：
+Mitigation:
 
-- 所有 mock 返回值严格遵守 `runtime-contracts.md`
-- 不使用 UI 专用 shape
+- All mock return values strictly follow `runtime-contracts.md`
+- Do not use UI-specific shapes
 
 ## Out of scope follow-ups
 
-本轮完成后，下一阶段再接：
+After this round is complete, the next phase will connect:
 
-- 真实 LLM parse service
-- 真实 risk/Wasm adapter
-- 真实 quote/simulate adapter
-- 钱包签名链路
-- 更强的 UI 视觉系统
+- Real LLM parse service
+- Real risk/Wasm adapter
+- Real quote/simulate adapter
+- Wallet signing flow
+- Stronger UI visual system

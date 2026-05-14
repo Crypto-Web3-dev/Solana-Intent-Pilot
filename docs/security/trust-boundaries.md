@@ -1,147 +1,179 @@
-# SIP 信任边界与安全约束
+# SIP Trust Boundaries & Security Constraints
 
-## 1. 目标
+## 1. Purpose
 
-SIP 的关键安全问题不是“有没有 AI”，而是“哪些决策可以信任 AI，哪些绝对不能只信 AI”。本文件用来明确系统中的信任边界和默认约束。
+The critical security question for SIP is not "does it use AI", but "which decisions can trust AI, and which absolutely cannot rely on AI alone". This document defines the trust boundaries and default constraints in the system.
 
-## 2. 主要边界
+## 2. Primary Boundaries
 
-### 2.1 用户输入边界
+### 2.1 User Input Boundary
 
-来源：
+Sources:
 
-- 自然语言输入
-- 当前页面选中文本
-- 页面中识别到的 token 文本和地址
+- Natural language input
+- Selected text on the current page
+- Token text and addresses detected on the page
 
-约束：
+Constraints:
 
-- 所有输入都视为不可信
-- 不能因为页面文本出现某个地址，就直接作为最终交易对象
-- 页面检测结果只能作为候选线索，必须经过解析和校验
+- All input is treated as untrusted
+- An address appearing in page text must not be used directly as the final transaction target
+- Page detection results are candidate leads only and must go through parsing and validation
+- Page-derived free text and token extraction are subject to hard upper bounds (`detect-context.ts`):
+  - body text ≤ 600 characters
+  - selected text ≤ 120 characters
+  - raw hints ≤ 2 entries, each ≤ 80 characters
+  - body-derived addresses ≤ 2, tickers ≤ 2
+  - total detected tokens ≤ 8
 
-### 2.2 LLM 输出边界
+### 2.2 Page Allowlist Boundary
 
-来源：
+Source:
 
-- OpenAI / Claude / 兼容模型
+- `SUPPORTED_PAGE_MATCHES` (`shared/supported-pages.ts`)
 
-约束：
+Constraints:
 
-- LLM 输出必须先经过 schema 校验
-- LLM 不得直接触发交易
-- LLM 的 `reasoning` 只能用于说明，不是安全证明
+- The allowlist is the sole authority for content-script injection, page-context selection, and signable-tab injection
+- Pages not on the allowlist receive no content-script injection, are not selected as page context, and are not eligible as signing targets
+- The allowlist must stay aligned with manifest `host_permissions` and content-script `config.matches`
+- Allowlist changes must be synchronized across all three locations: `supported-pages.ts`, `package.json` manifest, and content-script matches
 
-### 2.3 本地 Wasm 边界
+### 2.3 Content-Script Message Validation
 
-来源：
+Source:
 
-- Rust 编译后的 Wasm 模块
+- `chrome.runtime.onMessage` callback
 
-约束：
+Constraints:
 
-- Wasm 负责可验证的静态或规则型检查
-- Wasm 输出的风险报告可影响阻断逻辑
-- Wasm 不直接持有钱包状态或 UI 状态
+- Content-script only responds to messages where `sender.id === chrome.runtime.id`
+- Messages from other extensions are silently rejected and do not trigger context collection
 
-### 2.4 外部服务边界
+### 2.4 LLM Output Boundary
 
-来源：
+Source:
+
+- OpenAI / Claude / compatible models
+
+Constraints:
+
+- LLM output must pass schema validation before consumption
+- LLM must not directly trigger transactions
+- LLM `reasoning` is for explanation only, not a security proof
+
+### 2.5 Local Wasm Boundary
+
+Source:
+
+- Rust-compiled Wasm module
+
+Constraints:
+
+- Wasm handles verifiable static or rule-based checks
+- Wasm risk reports may influence blocking logic
+- Wasm does not hold wallet state or UI state directly
+
+### 2.6 External Service Boundary
+
+Sources:
 
 - RPC Provider
 - Jupiter API
-- metadata 或 holder 数据服务
+- Metadata or holder data services
 
-约束：
+Constraints:
 
-- 外部响应都可能失败、延迟或返回不完整数据
-- 缺数据时不能默认当作安全
-- 外部报价只能作为预览，最终提交前仍需用户确认
+- External responses may fail, lag, or return incomplete data
+- Missing data must not be treated as safe by default
+- External quotes are previews only; user confirmation is still required before final submission
 
-### 2.5 钱包签名边界
+### 2.7 Wallet Signing Boundary
 
-来源：
+Source:
 
-- Phantom 或兼容钱包
+- Phantom or compatible wallets
 
-约束：
+Constraints:
 
-- 私钥与签名权完全由钱包控制
-- SIP 只能请求签名，不能代持或绕过确认
-- UI 必须让用户知道自己正在签什么
+- Private keys and signing authority are fully controlled by the wallet
+- SIP can only request signatures; it cannot custody keys or bypass confirmation
+- UI must make it clear to the user what they are signing
 
-## 3. 默认安全规则
+## 3. Default Safety Rules
 
-- 没有通过 schema 校验的 Intent 不能进入执行链
-- 没有完成风险扫描的高价值交易不能进入签名链
-- 风险结果缺失时应展示 `unknown`，而不是伪造 `low`
-- 用户确认必须发生在最终交易内容可见之后
-- 任何自动执行能力都必须显式声明并默认关闭
-- MVP 默认不开放 high-risk override
+- Intents that fail schema validation must not enter the execution pipeline
+- High-value transactions without a completed risk scan must not enter the signing pipeline
+- Missing risk results must be displayed as `unknown`, never fabricated as `low`
+- User confirmation must occur after the final transaction content is visible
+- Any automatic execution capability must be explicitly declared and disabled by default
+- MVP does not enable high-risk override by default
 
-## 4. 典型攻击面
+## 4. Typical Attack Surfaces
 
-### 4.1 页面投毒
+### 4.1 Page Poisoning
 
-攻击方式：
+Attack vectors:
 
-- 页面伪造 token 符号
-- 注入误导性地址或文案
+- Pages forge token symbols
+- Inject misleading addresses or copy
 
-缓解：
+Mitigations:
 
-- 地址仅作候选线索
-- 必须结合 registry、上下文和风控校验
+- Page allowlist gating: only supported pages (`SUPPORTED_PAGE_MATCHES`) receive content-script injection, are selected as page context, or are chosen as signable tabs
+- Sender validation: content-script only responds to messages from its own extension, rejecting cross-extension injection
+- Input bounds: body text, selected text, raw hints, address counts, and ticker counts all have hard upper limits, preventing malicious pages from overwhelming the parsing pipeline with massive content
+- Addresses are candidate leads only and must be cross-referenced with registry, context, and risk checks
 
-### 4.2 LLM 幻觉
+### 4.2 LLM Hallucination
 
-攻击方式：
+Attack vectors:
 
-- 模型生成不存在或错误的 mint
-- 模型误判用户想交易的对象
+- Model generates non-existent or incorrect mints
+- Model misidentifies the asset the user intends to trade
 
-缓解：
+Mitigations:
 
-- schema + 业务校验双层校验
-- 低置信度进入澄清路径，不直接执行
-- UI 明示解析结果
+- Dual-layer validation: schema + business rule checks
+- Low-confidence results enter a clarification path instead of direct execution
+- UI displays parsing results explicitly
 
-### 4.3 外部接口不稳定
+### 4.3 External Service Instability
 
-攻击方式：
+Attack vectors:
 
-- RPC 限流
-- quote 失败
-- simulate 失败
+- RPC rate limiting
+- Quote failures
+- Simulation failures
 
-缓解：
+Mitigations:
 
-- 重试和备用节点
-- 将失败阶段明确展示给用户
-- 不把失败包装成成功或安全
+- Retry logic and fallback nodes
+- Failed stages are explicitly displayed to the user
+- Failures are not wrapped as success or safety
 
-### 4.4 风险误判
+### 4.4 Risk Misjudgment
 
-攻击方式：
+Attack vectors:
 
-- 数据不全导致低估风险
+- Incomplete data leads to underestimating risk
 
-缓解：
+Mitigations:
 
-- `unknown` 状态优先
-- 阻断策略尽量保守
-- 明确展示检查项覆盖范围
+- `unknown` status takes priority
+- Blocking policy is conservative by default
+- Check coverage is clearly displayed
 
-## 5. UI 安全表达要求
+## 5. UI Security Expression Requirements
 
-- 所有高风险结论都要有具体原因
-- 所有阻断都要说明是哪个检查项失败
-- 所有签名前页面都要展示输入资产、输出资产、协议和估算结果
-- 不允许把 AI 摘要文案伪装成确定性的安全结论
+- All high-risk conclusions must include specific reasons
+- All blocks must indicate which check failed
+- All pre-signing pages must display input assets, output assets, protocol, and estimated results
+- AI-generated summaries must not be presented as definitive safety conclusions
 
-## 6. 后续建议
+## 6. Future Recommendations
 
-- 增加安全事件日志
-- 如未来开放高风险 override，必须设计二次确认
-- 对不同协议引入更细的风险策略
-- 将安全约束同步到实现测试和 QA 清单
+- Add security event logging
+- If high-risk override is opened in the future, a second confirmation must be designed
+- Introduce finer-grained risk strategies per protocol
+- Synchronize security constraints into implementation tests and QA checklists
